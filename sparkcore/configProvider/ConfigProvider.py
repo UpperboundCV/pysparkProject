@@ -1,5 +1,7 @@
 import configparser
+import traceback
 from typing import List, Tuple
+import os.path
 
 
 class ConfigProvider:
@@ -25,15 +27,17 @@ class ConfigProvider:
     def __init__(self, mode: str = LOCAL) -> None:
         self.config = configparser.ConfigParser()
         try:
+            current_path = os.path.abspath(os.path.dirname(__file__))
+            env_config_path = os.path.join(current_path, "../../sparkEnvConfig/")
             if mode == self.LOCAL:
-                self.config.read('resources/local.ini')
+                env_config_path += 'local.ini'
             elif mode == self.DEV:
-                self.config.read('resources/dev.ini')
+                env_config_path += 'dev.ini'
             else:
-                self.config.read('resources/prod.ini')
+                env_config_path += 'prod.ini'
+            self.config.read(env_config_path)
         except Exception as e:
-            print("cannot read local config")
-            raise
+            traceback.print_exc(e)
 
     def get_spark_configs(self) -> List[Tuple[str, str]]:
         return [
