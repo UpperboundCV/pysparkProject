@@ -1,5 +1,5 @@
 from SparkCore import SparkCore
-from ingestion.SparkIngestion import SparkIngestion
+from reader.SparkReader import SparkReader
 from configProvider.ConfigProvider import ConfigProvider
 
 if __name__ == "__main__":
@@ -7,8 +7,8 @@ if __name__ == "__main__":
     config_provider = ConfigProvider()
     spark_core = SparkCore(mode=config_provider.LOCAL)
     print(f'spark conf: {spark_core.get_conf()}')
-    ingestion = SparkIngestion(spark_core.spark_session)
+    ingestion = SparkReader(spark_core.spark_session)
     print(f'spark version: {ingestion.get_spark_version()}')
-    spark_core.stop()
+    spark_core.close_session()
     conf = config_provider.config
     print(conf.sections())
