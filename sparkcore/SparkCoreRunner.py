@@ -3,7 +3,7 @@ from reader.SparkReader import SparkReader
 from configProvider.ConfigProvider import ConfigProvider
 
 if __name__ == "__main__":
-    print("hello pyspark")
+    print("hello sparkCore")
     config_provider = ConfigProvider()
     spark_core = SparkCore(mode=config_provider.LOCAL)
     print(f'spark conf: {spark_core.get_conf()}')

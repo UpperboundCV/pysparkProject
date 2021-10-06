@@ -53,3 +53,5 @@ class ConfigProvider:
 
     def get_spark_master(self) -> str:
         return self.config[self.SPARK].get(f'{self.SPARK_MASTER}', 'local[4]')
+
+    

@@ -1,9 +1,13 @@
 from pyspark.sql import SparkSession
 from pyspark.conf import SparkConf
-from configProvider.ConfigProvider import ConfigProvider
-
+try:
+    from configProvider.ConfigProvider import ConfigProvider
+except:
+    from .configProvider.ConfigProvider import ConfigProvider
 
 class SparkCore:
+    is_error = False
+
     def __init__(self, mode: str) -> None:
         try:
             conf_provider = ConfigProvider(mode=mode)
@@ -12,16 +16,12 @@ class SparkCore:
                 .builder \
                 .config(conf=self.spark_conf) \
                 .master(conf_provider.get_spark_master()) \
-                .enableHiveSupport() \
-                .config("spark.hive.mapred.supports.subdirectories", "true") \
-                .config("spark.hadoop.mapreduce.input.fileinputformat.input.dir.recursive", "true") \
                 .appName(conf_provider.get_spark_app_name()) \
                 .getOrCreate()
         except Exception as e:
             self.is_error = True
             raise TypeError(f"error to create spark_core: {e}")
         finally:
-            self.close_session()
             if self.is_error:
                 exit(1)
 
