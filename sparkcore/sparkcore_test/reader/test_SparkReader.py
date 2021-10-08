@@ -3,7 +3,10 @@ from sparkcore.SparkCore import SparkCore
 from sparkcore.reader.SparkReader import SparkReader
 import pyspark
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType, DoubleType
-
+from sys import platform
+import os
+if platform == 'linux':
+    os.environ["JAVA_HOME"] = "/usr/lib/jvm/java-8-openjdk-amd64/"
 
 @pytest.fixture
 def create_spark_session() -> pyspark.sql.SparkSession:

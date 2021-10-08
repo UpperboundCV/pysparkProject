@@ -1,5 +1,6 @@
 from pyspark.sql import SparkSession
 from pyspark.conf import SparkConf
+from typing import List, Tuple
 try:
     from configProvider.SparkEnvConfig import SparkEnvConfig
 except:# for sparkcore_test
@@ -17,6 +18,7 @@ class SparkCore:
                 .builder \
                 .config(conf=self.spark_conf) \
                 .master(conf_provider.get_spark_master()) \
+                .enableHiveSupport() \
                 .appName(conf_provider.get_spark_app_name()) \
                 .getOrCreate()
         except Exception as e:
@@ -29,7 +31,7 @@ class SparkCore:
     def get_spark_session(self) -> SparkSession:
         return self.spark_session
 
-    def get_conf(self) -> list[tuple[str, str]]:
+    def get_conf(self) -> List[Tuple[str, str]]:
         return self.spark_session.sparkContext.getConf().getAll()
 
     def close_session(self) -> None:

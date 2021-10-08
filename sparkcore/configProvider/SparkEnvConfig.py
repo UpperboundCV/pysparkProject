@@ -1,5 +1,4 @@
 from typing import List, Tuple
-
 from .ConfigProvider import ConfigProvider
 
 
@@ -19,6 +18,8 @@ class SparkEnvConfig(ConfigProvider):  # next will inherite from config provider
     SPARK_DRIVER_MEMORY: str = 'spark.driver.memory'
     SPARK_LOCAL_DIR: str = 'spark.local.dir'
     SPARK_MASTER: str = 'spark.master'
+    HIVE_EXEC_DYNAMIC_PARTITION: str = 'hive.exec.dynamic.partition'
+    HIVE_EXEC_DYNAMIC_PARTITION_MODE: str = 'hive.exec.dynamic.partition.mode'
 
     def __init__(self, mode: str) -> None:
         super().__init__('../../sparkEnvConfig/', mode)
@@ -28,7 +29,9 @@ class SparkEnvConfig(ConfigProvider):  # next will inherite from config provider
             (self.SPARK_EXECUTOR_MEMORY, self.config[self.SPARK].get(self.EXECUTOR_MEMORY, '2g')),
             (self.SPARK_EXECUTOR_CORES, self.config[self.SPARK].get(self.EXECUTOR_CORES, '1')),
             (self.SPARK_DRIVER_MEMORY, self.config[self.SPARK].get(self.DRIVER_MEMORY, '4g')),
-            (self.SPARK_LOCAL_DIR, self.config[self.SPARK].get(self.LOCAL_DIR, '/tmp'))
+            (self.SPARK_LOCAL_DIR, self.config[self.SPARK].get(self.LOCAL_DIR, '/tmp')),
+            (self.HIVE_EXEC_DYNAMIC_PARTITION, "true"),
+            (self.HIVE_EXEC_DYNAMIC_PARTITION_MODE, "nonstrict")
         ]
 
     def get_spark_app_name(self) -> str:

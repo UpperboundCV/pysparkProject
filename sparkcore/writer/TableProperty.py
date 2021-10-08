@@ -1,5 +1,4 @@
-from .ColumnDescriptor import ColumnDescriptor
-from typing import List, Dict, Optional
+from typing import Any
 
 
 class TableProperty:
@@ -9,17 +8,25 @@ class TableProperty:
     def __init__(self, db_name: str,
                  tb_name: str,
                  table_path: str,
-                 fields: List[ColumnDescriptor],
-                 partitions: Optional[List[ColumnDescriptor]] = None) -> None:
-        self.database = db_name
-        self.table = tb_name
-        self.table_path = table_path
+                 fields: Any,
+                 partitions: Any = None) -> None:
+        self.database = db_name.__getitem__(0)
+        self.table = tb_name.__getitem__(0)
+        self.table_path = table_path.__getitem__(0)
         self.partition_by = partitions
         self.column_descriptions = fields
 
-    def column_types_to_str(self, column_specs: List[ColumnDescriptor]) -> str:
-        column_types_process = [
-            f"{column_spec.name} {column_spec.data_type} COMMENT {column_spec.comment}" for column_spec in column_specs]
+    def column_types_to_str(self, column_specs: Any) -> str:
+        column_types_process = []
+        if type(column_specs) is list:
+            column_vectors = column_specs
+            column_types_process = [
+                f"{column_spec.name} {column_spec.data_type} COMMENT {column_spec.comment}" for column_spec in
+                column_specs]
+        else:
+            column_types_process = [
+                f"{column_spec.name} {column_spec.data_type} COMMENT {column_spec.comment}" for column_spec in
+                column_specs[0]]
         return ',\n'.join(column_types_process)
 
     def create_table_sql(self, table_format: str = ORC_FORMAT, delimitor: str = None) -> str:
