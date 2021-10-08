@@ -3,3 +3,4 @@ class ColumnDescriptor:
         self.name = column_name
         self.data_type = data_type
         self.comment = comment
+

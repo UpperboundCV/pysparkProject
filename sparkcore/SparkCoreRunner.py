@@ -1,10 +1,10 @@
 from SparkCore import SparkCore
 from reader.SparkReader import SparkReader
-from configProvider.ConfigProvider import ConfigProvider
+from configProvider.SparkEnvConfig import SparkEnvConfig
 
 if __name__ == "__main__":
     print("hello sparkCore")
-    config_provider = ConfigProvider()
+    config_provider = SparkEnvConfig('local')
     spark_core = SparkCore(mode=config_provider.LOCAL)
     print(f'spark conf: {spark_core.get_conf()}')
     ingestion = SparkReader(spark_core.spark_session)

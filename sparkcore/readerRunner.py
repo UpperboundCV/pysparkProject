@@ -1,12 +1,11 @@
-from reader.SparkReader import SparkReader
 from SparkCore import SparkCore
-from configProvider.ConfigProvider import ConfigProvider
+from reader.SparkReader import SparkReader
 
 # How to run:C:\spark\bin\spark-submit readerRunner.py
 if __name__ == '__main__':
     print("hello Reader")
-    config_provider = ConfigProvider()
-    spark_core = SparkCore(mode=config_provider.LOCAL)
+    # todo:create function find file in project directory
+    spark_core = SparkCore(mode='local')
     spark_reader = SparkReader(spark_core.spark_session)
     try:
         df = spark_reader.read_txt_file(txt_path='sparkcore/data/bluebook_doors_seats_collection_20210818.txt', \

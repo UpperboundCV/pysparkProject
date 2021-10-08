@@ -20,11 +20,11 @@ sys.path.append("/opt/cloudera/parcels/CDH/lib/spark/python/lib/py4j-0.10.7-src.
 
 from SparkCore import SparkCore
 from reader.SparkReader import SparkReader
-from configProvider.ConfigProvider import ConfigProvider
+from configProvider.SparkEnvConfig import EnvConfig
 
 if __name__ == "__main__":
     print("hello pyspark")
-    config_provider = ConfigProvider()
+    config_provider = EnvConfig()
     spark_core = SparkCore(mode=config_provider.LOCAL)
     print(f'spark conf: {spark_core.get_conf()}')
     ingestion = SparkReader(spark_core.spark_session)

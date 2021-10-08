@@ -1,16 +1,17 @@
 from pyspark.sql import SparkSession
 from pyspark.conf import SparkConf
 try:
-    from configProvider.ConfigProvider import ConfigProvider
-except:
-    from .configProvider.ConfigProvider import ConfigProvider
+    from configProvider.SparkEnvConfig import SparkEnvConfig
+except:# for sparkcore_test
+    from .configProvider.SparkEnvConfig import SparkEnvConfig
+
 
 class SparkCore:
     is_error = False
 
     def __init__(self, mode: str) -> None:
         try:
-            conf_provider = ConfigProvider(mode=mode)
+            conf_provider = SparkEnvConfig(mode=mode)
             self.spark_conf = SparkConf().setAll(pairs=conf_provider.get_spark_configs())
             self.spark_session = SparkSession \
                 .builder \
