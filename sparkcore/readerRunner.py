@@ -11,7 +11,7 @@ if __name__ == '__main__':
     spark_core = SparkCore(mode='local')
     spark_reader = SparkReader(spark_core.spark_session)
     try:
-        df = spark_reader.read_txt_file(txt_path='sparkcore/data/bluebook_doors_seats_collection_20210818.txt', \
+        df = spark_reader.read_txt_file(txt_path='helper/data/bluebook_doors_seats_collection_20210818.txt', \
                                    have_header=True, delimiter='~', is_infershema=True)
         df.show(truncate=False)
     except Exception as e:
