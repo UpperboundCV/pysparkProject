@@ -10,7 +10,7 @@ class SparkReader:
         return self.spark_session.version
 
     def read_txt_file(self, txt_path: str, have_header: bool, delimiter: str, is_infershema: bool) -> pyspark.sql.dataframe.DataFrame:
-        # "sparkcore/data/bluebook_doors_seats_collection_20210818.txt"
+        # "helper/data/bluebook_doors_seats_collection_20210818.txt"
         return self.spark_session.read \
             .option("header", "true" if have_header else "false") \
             .option("delimiter", delimiter) \
