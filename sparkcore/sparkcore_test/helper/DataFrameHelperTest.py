@@ -1,6 +1,7 @@
 import pytest
 from sparkcore.SparkCore import SparkCore
 from sparkcore.helper.DataFrameHelper import DataFrameHelper
+from sparkcore.helper.DateHelper import DateHelper
 import pyspark
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType, DoubleType
 from sys import platform
@@ -40,6 +41,7 @@ def test_update_insert_status_snap_monthly(mock_transaction_20211015: pyspark.sq
                                            spark_session: pyspark.sql.SparkSession) -> None:
     mock_transaction_20211015.show(truncate=False)
     process_date = "2021-10-15"
+    today_date = DateHelper().today_date()
     is_active = 'is_active'
     account_no = 'account_no'
     schema = StructType([
@@ -52,17 +54,17 @@ def test_update_insert_status_snap_monthly(mock_transaction_20211015: pyspark.sq
     snap_monthly_df = spark_session.createDataFrame(data, schema)
     snap_monthly_df.show(truncate=False)
     keys = [account_no, ]
-    actual_df = DataFrameHelper().update_insert_status_snap_monthly(mock_transaction_20211015, snap_monthly_df, is_active,
-                                                                 keys)
+    actual_df = DataFrameHelper().update_insert_status_snap_monthly(mock_transaction_20211015, snap_monthly_df,
+                                                                    is_active, keys, process_date)
     actual_df.show(truncate=False)
     month_key = 0
-    expected_first_stage = [(process_date, "a01", process_date, month_key,  DataFrameHelper.ACTIVE),
-                            (process_date, "a02", process_date, month_key,  DataFrameHelper.ACTIVE),
-                            (process_date, "a03", process_date, month_key,  DataFrameHelper.ACTIVE)]
+    expected_first_stage = [(process_date, "a01", today_date, month_key,  DataFrameHelper.ACTIVE),
+                            (process_date, "a02", today_date, month_key,  DataFrameHelper.ACTIVE),
+                            (process_date, "a03", today_date, month_key,  DataFrameHelper.ACTIVE)]
     expected_schema = StructType([
         StructField(DataFrameHelper.START_DATE, StringType(), True),
         StructField(account_no, StringType(), True),
-        StructField(DataFrameHelper.UPDATE_DATE, StringType(), True),
+        StructField(DataFrameHelper.UPDATE_DATE, StringType(), False),
         StructField(DataFrameHelper.MONTH_KEY, IntegerType(), False),
         StructField(is_active, StringType(), False)
     ])
