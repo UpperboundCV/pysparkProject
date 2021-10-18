@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 
 class DateHelper:
@@ -19,14 +19,22 @@ class DateHelper:
     def today_date(cls) -> str:
         return datetime.today().strftime(cls.DATE_FORMAT)
 
+    def next_n_date_from_today(cls, n: int) -> str:
+        return (datetime.today() + timedelta(days=n)).strftime(cls.DATE_FORMAT)
+
     def number_month_diff(cls, end_date: datetime, start_date: datetime) -> int:
         return (end_date.year - start_date.year) * 12 + (end_date.month - start_date.month)
 
-    def date_str_num_month_diff(cls, end_date: str, start_date: str, date_delimiter: str) -> int:
-        end_date_dt = cls.str2datetime(end_date, date_delimiter)
-        start_date_dt = cls.str2datetime(start_date, date_delimiter)
+    def date_str_num_month_diff(cls, end_date: str, start_date: str) -> int:
+        end_date_dt = cls.str2datetime(end_date, '-')
+        start_date_dt = cls.str2datetime(start_date, '-')
         return cls.number_month_diff(end_date_dt, start_date_dt)
 
     def str2datetime(cls, date: str, date_delimiter: str) -> datetime:
         [year, month, date] = date.split(date_delimiter)
-        return datetime.datetime(year, month, date)
+        return datetime(int(year), int(month), int(date))
+
+    def add_days(cls, date: str, date_delimiter: str, n: int) -> str:
+        return (cls.str2datetime(date, date_delimiter) + timedelta(days=n)).strftime(cls.DATE_FORMAT)
+
+
