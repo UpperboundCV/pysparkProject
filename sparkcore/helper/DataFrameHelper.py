@@ -13,24 +13,26 @@ class DataFrameHelper:
     UPDATE_DATE = 'update_date'
     ACTIVE = 'active'
     INACTIVE = 'inactive'
-
-    # def __init__(self, spark_session: pyspark.sql.SparkSession) -> None:
-    #     self.spark_session = spark_session
+    CURRENT_STATUS = "current_status"
+    TRANSACTION_START_DATE = "transaction_start_date"
+    LAST_UPDATE_DATE = 'last_update_date'
 
     def update_insert_status_snap_monthly(cls, transaction_df: pyspark.sql.dataframe.DataFrame,
                                           snap_monthly_df: pyspark.sql.dataframe.DataFrame,
                                           status_column: str,
-                                          key_columns: List[str],
-                                          process_date: str) -> pyspark.sql.dataframe.DataFrame:
-
+                                          key_columns: List[str], process_date: str,
+                                          today_date: str) -> pyspark.sql.dataframe.DataFrame:
         if snap_monthly_df.where(col(cls.MONTH_KEY) == 0).count() == 0:
             return transaction_df \
-                .withColumn(cls.UPDATE_DATE, lit(DateHelper().today_date())) \
+                .withColumn(cls.UPDATE_DATE, lit(today_date)) \
                 .withColumn(cls.MONTH_KEY, lit(0)) \
                 .withColumn(status_column, lit(cls.ACTIVE))
         else:
             current_snap_month = \
                 snap_monthly_df.where(col(cls.MONTH_KEY) == 0).select(max(col(cls.START_DATE))).first()[0]
+            print(f"process_date:{process_date}")
+            print(f"current_snap_month:{current_snap_month}")
+            print(f"diff month:{DateHelper().date_str_num_month_diff(process_date, current_snap_month)}")
 
             if DateHelper().date_str_num_month_diff(process_date, current_snap_month) > 0:
                 # It should update the month key
@@ -39,27 +41,38 @@ class DataFrameHelper:
                 # process_date is in monthkey = 0
                 temp_df = transaction_df \
                     .where(col(cls.START_DATE) == process_date) \
-                    .withColumn(cls.UPDATE_DATE, lit(DateHelper().today_date())) \
+                    .withColumn(cls.UPDATE_DATE, lit(today_date)) \
                     .withColumn(cls.MONTH_KEY, lit(0)) \
                     .withColumn(status_column, lit(cls.ACTIVE))
                 temp_df.show(truncate=False)
                 return updated_month_key_df.union(temp_df)
-            elif DateHelper().date_str_num_month_diff(process_date, current_snap_month) < 0:
+            # elif DateHelper().date_str_num_month_diff(process_date, current_snap_month) < 0:
+            else:
                 # this process_date is not in monthkey = 0 but it is in another monthkey
                 target_month_key = cls.find_month_key_of_process_date(process_date, snap_monthly_df)
+
                 # rerun the whole monthkey
-                transaction_of_month_key = transaction_df \
-                    .where(months_between(last_day(col(cls.START_DATE)), last_day(lit(process_date)))==0) \
-                    .orderBy(col(cls.START_DATE))
-            #     todo: using update_insert
-            else:
-                # this process_date is in monthkey==0
-                # rerun from process_date to the latest start_date
-                pass
+                transaction_of_month_key = transaction_df.where(col(cls.START_DATE) == process_date) \
+                    .withColumn(cls.LAST_UPDATE_DATE, lit(today_date)) \
+                    .withColumn(cls.MONTH_KEY, lit(target_month_key)) \
+                    .withColumn(cls.CURRENT_STATUS, lit(cls.ACTIVE)) \
+                    .withColumnRenamed(cls.START_DATE, cls.TRANSACTION_START_DATE)
+                key_columns.append(cls.MONTH_KEY)
+                non_target_month_key_df = snap_monthly_df.where(col(cls.MONTH_KEY) != target_month_key)
+                target_month_key_df = snap_monthly_df.where(col(cls.MONTH_KEY) == target_month_key).cache()
+                # target_month_key_df.show(truncate=False)
+                updated_df = cls.update_insert(transaction_of_month_key,
+                                         target_month_key_df,
+                                         status_column,
+                                         key_columns,
+                                         process_date,
+                                         target_month_key)
+                updated_df.show(truncate=False)
+                return non_target_month_key_df.unionByName(updated_df)
 
     def find_month_key_of_process_date(cls, process_date: str, snap_monthly_df: pyspark.sql.dataframe.DataFrame) -> int:
-        return snap_monthly_df.where(months_between(last_day(col(cls.START_DATE)), last_day(lit(process_date)))==0) \
-                            .select(max(cls.MONTH_KEY)).first()[0]
+        return snap_monthly_df.where(months_between(last_day(col(cls.START_DATE)), last_day(lit(process_date))) == 0) \
+            .select(max(cls.MONTH_KEY)).first()[0]
 
     def get_month_keys(cls, snap_monthly_df: pyspark.sql.dataframe.DataFrame) -> List[int]:
         return [int(collect_monthkey[cls.MONTH_KEY]) for collect_monthkey in
@@ -73,7 +86,8 @@ class DataFrameHelper:
         return snap_monthly_df \
             .withColumn(process_datetime, lit(process_date)) \
             .withColumn(cls.MONTH_KEY,
-                        ceil(months_between(last_day(col(process_datetime)), last_day(col(cls.START_DATE)))).cast(IntegerType())) \
+                        ceil(months_between(last_day(col(process_datetime)), last_day(col(cls.START_DATE)))).cast(
+                            IntegerType())) \
             .drop(process_datetime)
 
     def update_insert(cls, transaction_df: pyspark.sql.dataframe.DataFrame,
@@ -84,21 +98,18 @@ class DataFrameHelper:
                       month_key: int) -> pyspark.sql.dataframe.DataFrame:
         base = 'base'
         current = 'current'
-        current_status = "current_status"
-        transaction_start_date = "transaction_start_date"
-        process_date_df = transaction_df \
-            .where(col(cls.START_DATE) == process_date) \
-            .withColumn(current_status, lit(cls.ACTIVE)) \
-            .withColumnRenamed(cls.START_DATE, transaction_start_date) \
-            .cache()
-        process_date_df.show(truncate=False)
+        transaction_df.printSchema()
+        snap_monthly_df.printSchema()
         return snap_monthly_df.alias(base) \
-            .join(process_date_df.alias(current), key_columns, how='outer') \
-            .withColumn(status_column,
-                        when(col(f"{current}.{current_status}").isNotNull(), lit(cls.ACTIVE)) \
-                        .otherwise(lit(cls.INACTIVE))) \
-            .withColumn(cls.MONTH_KEY, coalesce(col(cls.MONTH_KEY), lit(month_key))) \
-            .withColumn(cls.UPDATE_DATE, coalesce(col(cls.UPDATE_DATE), lit(DateHelper().today_date()))) \
-            .withColumn(cls.START_DATE, coalesce(col(f'{base}.{cls.START_DATE}'), col(f'{transaction_start_date}'))) \
-            .drop(transaction_start_date) \
-            .drop(current_status)
+            .join(transaction_df.alias(current), key_columns, how='outer') \
+            .withColumn(cls.UPDATE_DATE, coalesce(col(f'{cls.LAST_UPDATE_DATE}'), col(f'{cls.UPDATE_DATE}'))) \
+            .withColumn(cls.START_DATE, coalesce(col(f'{cls.TRANSACTION_START_DATE}'), col(f'{cls.START_DATE}'))) \
+            .withColumn(status_column, when( col(cls.CURRENT_STATUS)==cls.ACTIVE, col(cls.CURRENT_STATUS))
+                        .otherwise(lit(cls.INACTIVE)))\
+            .drop(cls.TRANSACTION_START_DATE)\
+            .drop(cls.LAST_UPDATE_DATE) \
+            .drop(cls.CURRENT_STATUS)
+
+
+
+

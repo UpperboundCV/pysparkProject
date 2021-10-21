@@ -19,8 +19,8 @@ def spark_session() -> pyspark.sql.SparkSession:
 
 
 @pytest.fixture
-def mock_transaction_20211015(spark_session: pyspark.sql.SparkSession) -> pyspark.sql.dataframe.DataFrame:
-    date = '2021-10-15'
+def mock_transaction_20210915(spark_session: pyspark.sql.SparkSession) -> pyspark.sql.dataframe.DataFrame:
+    date = '2021-09-15'
     # columns = ["start_date", "account_no"]
     account_no = 'account_no'
     schema = StructType([
@@ -33,9 +33,9 @@ def mock_transaction_20211015(spark_session: pyspark.sql.SparkSession) -> pyspar
 
 
 @pytest.fixture
-def mock_transaction_20211101(mock_transaction_20211015: pyspark.sql.SparkSession,
+def mock_transaction_20211001(mock_transaction_20210915: pyspark.sql.SparkSession,
                               spark_session: pyspark.sql.SparkSession) -> pyspark.sql.dataframe.DataFrame:
-    date = '2021-11-01'
+    date = '2021-10-01'
     # columns = ["start_date", "account_no"]
     account_no = 'account_no'
     schema = StructType([
@@ -44,7 +44,22 @@ def mock_transaction_20211101(mock_transaction_20211015: pyspark.sql.SparkSessio
     ])
     data = [(date, "a01"), (date, "a04"), (date, "a05")]
     df = spark_session.createDataFrame(data, schema)
-    return df.union(mock_transaction_20211015)
+    return df.union(mock_transaction_20210915)
+
+
+@pytest.fixture
+def mock_transaction_20211002(mock_transaction_20211001: pyspark.sql.SparkSession,
+                              spark_session: pyspark.sql.SparkSession) -> pyspark.sql.dataframe.DataFrame:
+    date = '2021-10-02'
+    # columns = ["start_date", "account_no"]
+    account_no = 'account_no'
+    schema = StructType([
+        StructField(DataFrameHelper.START_DATE, StringType(), True),
+        StructField(account_no, StringType(), True),
+    ])
+    data = [(date, "a01"), (date, "a02"), (date, "a03")]
+    df = spark_session.createDataFrame(data, schema)
+    return df.union(mock_transaction_20211001)
 
 
 def are_dfs_schema_equal(df1: pyspark.sql.dataframe.DataFrame, df2: pyspark.sql.dataframe.DataFrame) -> bool:
@@ -55,11 +70,11 @@ def are_dfs_data_equal(df1: pyspark.sql.dataframe.DataFrame, df2: pyspark.sql.da
     return False if df1.collect() != df2.collect() else True
 
 
-def test_update_insert_status_snap_monthly(mock_transaction_20211015: pyspark.sql.dataframe.DataFrame,
-                                           spark_session: pyspark.sql.SparkSession) -> None:
-    mock_transaction_20211015.show(truncate=False)
-    process_date = '2021-10-15'
-    today_date = DateHelper().today_date()
+def test_update_insert_empty_snap_monthly(mock_transaction_20210915: pyspark.sql.dataframe.DataFrame,
+                                          spark_session: pyspark.sql.SparkSession) -> None:
+    mock_transaction_20210915.show(truncate=False)
+    process_date = '2021-09-15'
+    today_date = '2021-09-15'
     is_active = 'is_active'
     account_no = 'account_no'
     schema = StructType([
@@ -72,8 +87,8 @@ def test_update_insert_status_snap_monthly(mock_transaction_20211015: pyspark.sq
     snap_monthly_df = spark_session.createDataFrame(data, schema)
     snap_monthly_df.show(truncate=False)
     keys = [account_no, ]
-    actual_df = DataFrameHelper().update_insert_status_snap_monthly(mock_transaction_20211015, snap_monthly_df,
-                                                                    is_active, keys, process_date)
+    actual_df = DataFrameHelper().update_insert_status_snap_monthly(mock_transaction_20210915, snap_monthly_df,
+                                                                    is_active, keys, process_date, today_date)
     actual_df.show(truncate=False)
     month_key = 0
     expected_first_stage = [(process_date, "a01", today_date, month_key, DataFrameHelper.ACTIVE),
@@ -119,17 +134,33 @@ def test_update_month_keys(spark_session: pyspark.sql.SparkSession) -> None:
     ])
     test_df = spark_session.createDataFrame(test_data, test_schema)
     test_df.show(truncate=False)
-    actual = DataFrameHelper().update_month_key(process_date="2021-10-10", snap_monthly_df=test_df)
-    actual.show(truncate=False)
-    assert True
+    actual_df = DataFrameHelper().update_month_key(process_date="2021-10-10", snap_monthly_df=test_df)
+    actual_df.show(truncate=False)
+    actual_df.printSchema()
+    updated_month_key = [(last_month, "a01", today_date, 1, DataFrameHelper.ACTIVE),
+                         (last_two_month, "a02", today_date, 2, DataFrameHelper.ACTIVE),
+                         (last_three_month, "a03", today_date, 3, DataFrameHelper.ACTIVE),
+                         (last_three_month, "a04", today_date, 3, DataFrameHelper.ACTIVE)]
+    test_schema = StructType([
+        StructField(DataFrameHelper.START_DATE, StringType(), True),
+        StructField(account_no, StringType(), True),
+        StructField(DataFrameHelper.UPDATE_DATE, StringType(), False),
+        StructField(DataFrameHelper.MONTH_KEY, IntegerType(), True),
+        StructField(is_active, StringType(), False)
+    ])
+    expected_df = spark_session.createDataFrame(updated_month_key, test_schema)
+    expected_df.show(truncate=False)
+    expected_df.printSchema()
+    assert are_dfs_schema_equal(actual_df, expected_df)
+    assert are_dfs_data_equal(actual_df, expected_df)
 
 
-def test_update_insert_status_snap_monthly_new_month(mock_transaction_20211015: pyspark.sql.dataframe.DataFrame,
-                                                     mock_transaction_20211101: pyspark.sql.dataframe.DataFrame,
+def test_update_insert_status_snap_monthly_new_month(mock_transaction_20210915: pyspark.sql.dataframe.DataFrame,
+                                                     mock_transaction_20211001: pyspark.sql.dataframe.DataFrame,
                                                      spark_session: pyspark.sql.SparkSession) -> None:
-    mock_transaction_20211015.show(truncate=False)
-    process_date = "2021-10-15"
-    today_date = DateHelper().today_date()
+    mock_transaction_20210915.show(truncate=False)
+    process_date = "2021-09-15"
+    today_date = "2021-09-15"
     is_active = 'is_active'
     account_no = 'account_no'
     schema = StructType([
@@ -142,9 +173,79 @@ def test_update_insert_status_snap_monthly_new_month(mock_transaction_20211015: 
     snap_monthly_df = spark_session.createDataFrame(data, schema)
     snap_monthly_df.show(truncate=False)
     keys = [account_no, ]
-    actual_first_stage_df = DataFrameHelper().update_insert_status_snap_monthly(mock_transaction_20211015,
-                                                                                snap_monthly_df,
-                                                                                is_active, keys, process_date)
+    actual_first_stage_df = DataFrameHelper().update_insert_status_snap_monthly(mock_transaction_20210915,
+                                                                                snap_monthly_df, is_active, keys,
+                                                                                process_date, today_date)
+    actual_first_stage_df.show(truncate=False)
+    month_key = 0
+    expected_first_stage = [(process_date, "a01", today_date, month_key, DataFrameHelper.ACTIVE),
+                            (process_date, "a02", today_date, month_key, DataFrameHelper.ACTIVE),
+                            (process_date, "a03", today_date, month_key, DataFrameHelper.ACTIVE)]
+    expected_schema = StructType([
+        StructField(DataFrameHelper.START_DATE, StringType(), True),
+        StructField(account_no, StringType(), True),
+        StructField(DataFrameHelper.UPDATE_DATE, StringType(), False),
+        StructField(DataFrameHelper.MONTH_KEY, IntegerType(), False),
+        StructField(is_active, StringType(), False)
+    ])
+    expected_df = spark_session.createDataFrame(expected_first_stage, expected_schema)
+    expected_df.show(truncate=False)
+    process_date = "2021-10-01"
+    today_date = "2021-10-03"
+    actual_second_stage_df = DataFrameHelper().update_insert_status_snap_monthly(mock_transaction_20211001,
+                                                                                 actual_first_stage_df, is_active, keys,
+                                                                                 process_date, today_date)
+    actual_second_stage_df.show(truncate=False)
+    expected_first_stage = [(process_date, "a01", today_date, month_key, DataFrameHelper.ACTIVE),
+                            (process_date, "a02", today_date, month_key, DataFrameHelper.ACTIVE),
+                            (process_date, "a03", today_date, month_key, DataFrameHelper.ACTIVE)]
+    # # todo: asssert actual_second_stage_df == expected_second_stage_df
+
+    spark_session.stop()
+
+
+# def test_find_month_key_of_process_date(spark_session: pyspark.sql.SparkSession) -> None:
+#     expected_first_stage = [("2021-10-02", "a01", "2021-10-02", 1, DataFrameHelper.ACTIVE),
+#                             ("2021-10-31", "a02", "2021-10-31", 1, DataFrameHelper.ACTIVE),
+#                             ("2021-11-01", "a03", "2021-11-01", 0, DataFrameHelper.ACTIVE)]
+#     expected_schema = StructType([
+#         StructField(DataFrameHelper.START_DATE, StringType(), True),
+#         StructField('account_no', StringType(), True),
+#         StructField(DataFrameHelper.UPDATE_DATE, StringType(), False),
+#         StructField(DataFrameHelper.MONTH_KEY, IntegerType(), False),
+#         StructField('is_active', StringType(), False)
+#     ])
+#     expected_df = spark_session.createDataFrame(expected_first_stage, expected_schema)
+#     expected_df.show(truncate=False)
+#     process_date = '2021-10-05'
+#     target_month_key = DataFrameHelper().find_month_key_of_process_date(process_date, expected_df)
+#     assert target_month_key == 1
+#     process_date = '2021-11-05'
+#     target_month_key = DataFrameHelper().find_month_key_of_process_date(process_date, expected_df)
+#     assert target_month_key == 0
+
+def test_update_insert_status_snap_monthly_existing_month(mock_transaction_20210915: pyspark.sql.dataframe.DataFrame,
+                                                          mock_transaction_20211001: pyspark.sql.dataframe.DataFrame,
+                                                          mock_transaction_20211002: pyspark.sql.dataframe.DataFrame,
+                                                          spark_session: pyspark.sql.SparkSession) -> None:
+    process_date = "2021-09-15"
+    today_date = "2021-09-15"
+    is_active = 'is_active'
+    account_no = 'account_no'
+    schema = StructType([
+        StructField(account_no, StringType(), True),
+        StructField(DataFrameHelper.MONTH_KEY, IntegerType(), True),
+        StructField(DataFrameHelper.UPDATE_DATE, StringType(), True),
+        StructField(is_active, StringType(), True)
+    ])
+    data = []
+    snap_monthly_df = spark_session.createDataFrame(data, schema)
+    snap_monthly_df.show(truncate=False)
+    mock_transaction_20210915.show(truncate=False)
+    keys = [account_no, ]
+    actual_first_stage_df = DataFrameHelper().update_insert_status_snap_monthly(mock_transaction_20210915,
+                                                                                snap_monthly_df, is_active, keys,
+                                                                                process_date, today_date)
     actual_first_stage_df.show(truncate=False)
     month_key = 0
     expected_first_stage = [(process_date, "a01", today_date, month_key, DataFrameHelper.ACTIVE),
@@ -164,31 +265,26 @@ def test_update_insert_status_snap_monthly_new_month(mock_transaction_20211015: 
     print(expected_df.schema)
     assert are_dfs_schema_equal(actual_first_stage_df, expected_df)
     assert are_dfs_data_equal(actual_first_stage_df, expected_df)
-    process_date = "2021-11-01"
-    actual_second_stage_df = DataFrameHelper().update_insert_status_snap_monthly(mock_transaction_20211101,
+    process_date = "2021-10-01"
+    today_date = "2021-10-01"
+    actual_second_stage_df = DataFrameHelper().update_insert_status_snap_monthly(mock_transaction_20211001,
                                                                                  actual_first_stage_df,
-                                                                                 is_active, keys, process_date)
-    actual_second_stage_df.show(truncate=False)
-    # asssert actual_second_stage_df == expected_second_stage_df
+                                                                                 is_active,
+                                                                                 keys,
+                                                                                 process_date,
+                                                                                 today_date)
+    actual_second_stage_df.orderBy(DataFrameHelper().MONTH_KEY, DataFrameHelper().START_DATE).show(truncate=False)
+    # todo: asssert actual_second_stage_df == expected_second_stage_df
+    process_date = "2021-10-02"
+    today_date = "2021-10-02"
+    mock_transaction_20211002.show(truncate=False)
+    print("mock_transaction_20211102.show(truncate=False)")
+    actual_third_stage_df = DataFrameHelper().update_insert_status_snap_monthly(mock_transaction_20211002,
+                                                                                actual_second_stage_df,
+                                                                                is_active,
+                                                                                keys,
+                                                                                process_date,
+                                                                                today_date)
+    actual_third_stage_df.orderBy(DataFrameHelper().MONTH_KEY, DataFrameHelper().START_DATE).show(truncate=False)
 
     spark_session.stop()
-
-def test_find_month_key_of_process_date(spark_session: pyspark.sql.SparkSession) -> None:
-    expected_first_stage = [("2021-10-02", "a01", "2021-10-02", 1, DataFrameHelper.ACTIVE),
-                            ("2021-10-31", "a02", "2021-10-31", 1, DataFrameHelper.ACTIVE),
-                            ("2021-11-01", "a03", "2021-11-01", 0, DataFrameHelper.ACTIVE)]
-    expected_schema = StructType([
-        StructField(DataFrameHelper.START_DATE, StringType(), True),
-        StructField('account_no', StringType(), True),
-        StructField(DataFrameHelper.UPDATE_DATE, StringType(), False),
-        StructField(DataFrameHelper.MONTH_KEY, IntegerType(), False),
-        StructField('is_active', StringType(), False)
-    ])
-    expected_df = spark_session.createDataFrame(expected_first_stage, expected_schema)
-    expected_df.show(truncate=False)
-    process_date = '2021-10-05'
-    target_month_key = DataFrameHelper().find_month_key_of_process_date(process_date, expected_df)
-    assert target_month_key == 1
-    process_date = '2021-11-05'
-    target_month_key = DataFrameHelper().find_month_key_of_process_date(process_date, expected_df)
-    assert target_month_key == 0
