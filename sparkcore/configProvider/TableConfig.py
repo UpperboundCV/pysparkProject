@@ -1,6 +1,9 @@
 from .ConfigProvider import ConfigProvider
 from typing import List, Optional
-from ColumnDescriptor import ColumnDescriptor
+try:
+    from ColumnDescriptor import ColumnDescriptor
+except:
+    from sparkcore.ColumnDescriptor import ColumnDescriptor
 
 
 class TableConfig(ConfigProvider):

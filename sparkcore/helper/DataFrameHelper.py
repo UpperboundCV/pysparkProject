@@ -20,10 +20,11 @@ class DataFrameHelper:
     def update_insert_status_snap_monthly(cls, transaction_df: pyspark.sql.dataframe.DataFrame,
                                           snap_monthly_df: pyspark.sql.dataframe.DataFrame,
                                           status_column: str,
-                                          key_columns: List[str], process_date: str,
+                                          key_columns: List[str],
+                                          process_date: str,
                                           today_date: str) -> pyspark.sql.dataframe.DataFrame:
         if snap_monthly_df.where(col(cls.MONTH_KEY) == 0).count() == 0:
-            return transaction_df \
+            return transaction_df.where(col(cls.START_DATE)==process_date) \
                 .withColumn(cls.UPDATE_DATE, lit(today_date)) \
                 .withColumn(cls.MONTH_KEY, lit(0)) \
                 .withColumn(status_column, lit(cls.ACTIVE))
@@ -50,25 +51,29 @@ class DataFrameHelper:
             else:
                 # this process_date is not in monthkey = 0 but it is in another monthkey
                 target_month_key = cls.find_month_key_of_process_date(process_date, snap_monthly_df)
-
                 # rerun the whole monthkey
                 transaction_of_month_key = transaction_df.where(col(cls.START_DATE) == process_date) \
                     .withColumn(cls.LAST_UPDATE_DATE, lit(today_date)) \
                     .withColumn(cls.MONTH_KEY, lit(target_month_key)) \
                     .withColumn(cls.CURRENT_STATUS, lit(cls.ACTIVE)) \
                     .withColumnRenamed(cls.START_DATE, cls.TRANSACTION_START_DATE)
-                key_columns.append(cls.MONTH_KEY)
+                if cls.MONTH_KEY not in key_columns:
+                    key_columns.append(cls.MONTH_KEY)
                 non_target_month_key_df = snap_monthly_df.where(col(cls.MONTH_KEY) != target_month_key)
-                target_month_key_df = snap_monthly_df.where(col(cls.MONTH_KEY) == target_month_key).cache()
+                target_snap_month_key_df = snap_monthly_df.where(col(cls.MONTH_KEY) == target_month_key).cache()
                 # target_month_key_df.show(truncate=False)
                 updated_df = cls.update_insert(transaction_of_month_key,
-                                         target_month_key_df,
-                                         status_column,
-                                         key_columns,
-                                         process_date,
-                                         target_month_key)
+                                               target_snap_month_key_df,
+                                               status_column,
+                                               key_columns,
+                                               process_date,
+                                               target_month_key)
                 updated_df.show(truncate=False)
                 return non_target_month_key_df.unionByName(updated_df)
+
+    def does_month_exist(cls, process_date: str, snap_monthly_df: pyspark.sql.dataframe.DataFrame) -> bool:
+        return snap_monthly_df.where(
+            months_between(last_day(col(cls.START_DATE)), last_day(lit(process_date))) == 0).count() > 0
 
     def find_month_key_of_process_date(cls, process_date: str, snap_monthly_df: pyspark.sql.dataframe.DataFrame) -> int:
         return snap_monthly_df.where(months_between(last_day(col(cls.START_DATE)), last_day(lit(process_date))) == 0) \
@@ -104,12 +109,8 @@ class DataFrameHelper:
             .join(transaction_df.alias(current), key_columns, how='outer') \
             .withColumn(cls.UPDATE_DATE, coalesce(col(f'{cls.LAST_UPDATE_DATE}'), col(f'{cls.UPDATE_DATE}'))) \
             .withColumn(cls.START_DATE, coalesce(col(f'{cls.TRANSACTION_START_DATE}'), col(f'{cls.START_DATE}'))) \
-            .withColumn(status_column, when( col(cls.CURRENT_STATUS)==cls.ACTIVE, col(cls.CURRENT_STATUS))
-                        .otherwise(lit(cls.INACTIVE)))\
-            .drop(cls.TRANSACTION_START_DATE)\
+            .withColumn(status_column, when(col(cls.CURRENT_STATUS) == cls.ACTIVE, col(cls.CURRENT_STATUS))
+                        .otherwise(lit(cls.INACTIVE))) \
+            .drop(cls.TRANSACTION_START_DATE) \
             .drop(cls.LAST_UPDATE_DATE) \
             .drop(cls.CURRENT_STATUS)
-
-
-
-

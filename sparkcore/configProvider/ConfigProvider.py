@@ -13,6 +13,7 @@ class ConfigProvider:
         try:
             current_path = os.path.abspath(os.path.dirname(__file__))
             env_config_path = os.path.join(current_path, config_path)
+            print(f'env_config_path:{env_config_path}')
             if mode == self.LOCAL:
                 env_config_path += 'local.ini'
             elif mode == self.DEV:
