@@ -6,6 +6,7 @@ from sparkcore.helper.DataFrameHelper import DataFrameHelper
 from sparkcore.helper.DateHelper import DateHelper
 import pyspark
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType, DoubleType
+from pyspark.sql.functions import col
 from sys import platform
 from sparkcore.writer.TableProperty import TableProperty
 from sparkcore.ColumnDescriptor import ColumnDescriptor
@@ -412,40 +413,6 @@ def test_rerun(mock_transaction_multiple_key_20210902: pyspark.sql.dataframe.Dat
                mock_transaction_multiple_key_20211003: pyspark.sql.dataframe.DataFrame,
                mock_month_key_df: pyspark.sql.dataframe.DataFrame,
                spark_session: pyspark.sql.SparkSession) -> None:
-    # spark_session.sparkContext.setCheckpointDir("file:///tmp/checkpoint")
-    # config_path = '../sparkcore_test/helper/config/'
-    # transaction_table_config = TableConfig(config_path, 'local', 'transaction')
-    # transaction_table_property = TableProperty(db_name=transaction_table_config.db_name,
-    #                                            tb_name=transaction_table_config.tb_name,
-    #                                            table_path=transaction_table_config.table_path,
-    #                                            fields=transaction_table_config.fields,
-    #                                            partitions=transaction_table_config.partitions)
-    # print(
-    #     transaction_table_property.create_table_sql(table_format=transaction_table_property.ORC_FORMAT, delimitor=None))
-    # spark_writer = SparkWriter(spark_session)
-    # spark_writer.create_table(transaction_table_property)
-    # transaction_df = spark_session.table(f'{transaction_table_property.database}.{transaction_table_property.table}')
-    # transaction_df.show(truncate=False)
-    # mock_transaction_multiple_key_20210901.write \
-    #     .format("orc") \
-    #     .mode("overwrite") \
-    #     .partitionBy('start_date') \
-    #     .saveAsTable(f'{transaction_table_property.database}.{transaction_table_property.table}')
-    # transaction_df = spark_session.table(f'{transaction_table_property.database}.{transaction_table_property.table}')
-    # transaction_df.show(truncate=False)
-    # snap_monthly_table_config = TableConfig(config_path, 'local', 'snap_monthly')
-    # snap_monthly_table_property = TableProperty(db_name=snap_monthly_table_config.db_name,
-    #                                             tb_name=snap_monthly_table_config.tb_name,
-    #                                             table_path=snap_monthly_table_config.table_path,
-    #                                             fields=snap_monthly_table_config.fields,
-    #                                             partitions=snap_monthly_table_config.partitions)
-    # print(
-    #     snap_monthly_table_property.create_table_sql(table_format=snap_monthly_table_property.ORC_FORMAT,
-    #                                                  delimitor=None))
-    # spark_writer.create_table(snap_monthly_table_property)
-    # snap_monthly_df = spark_session.table(f'{snap_monthly_table_property.database}.{snap_monthly_table_property.table}')
-    # snap_monthly_df.show(truncate=False)
-
     account_no = 'account_no'
     branch_no = 'branch_no'
     status_column = 'is_active'
@@ -518,3 +485,318 @@ def test_rerun(mock_transaction_multiple_key_20210902: pyspark.sql.dataframe.Dat
     assert are_dfs_data_equal(snap_monthly_df, test_df)
     spark_session.stop()
 
+
+@pytest.fixture
+def mock_transaction_df_w_keys(spark_session: pyspark.sql.SparkSession) -> pyspark.sql.dataframe.DataFrame:
+    date = '2021-10-27'
+    data = [("BAY", "GECAL", "HP", "13", "1118860", date),
+            ("AYCAL", "GECAL", "HP", "11", "AB77053", date),
+            ("AYCAL", "GECAL", "MC", "12", "AB77070", date),
+            ("BAY", "GECAL", "HP", "11", "1122978", date)]
+    schema = StructType([
+        StructField("entity_code", StringType(), False),
+        StructField("company_code", StringType(), False),
+        StructField("product_code", StringType(), False),
+        StructField("branch_code", StringType(), False),
+        StructField("contract_code", StringType(), False),
+        StructField("data_date", StringType(), False)
+    ])
+    df = spark_session.createDataFrame(data, schema)
+    return df
+
+
+@pytest.fixture
+def mock_transaction_pst_df_w_keys(spark_session: pyspark.sql.SparkSession) -> pyspark.sql.dataframe.DataFrame:
+    start_date = '2021-10-27'
+    date = '641027'
+    data = [("BAY", "GECAL", "HP", "13", "1118860", date, start_date),
+            ("AYCAL", "GECAL", "HP", "11", "AB77053", date, start_date),
+            ("AYCAL", "GECAL", "MC", "12", "AB77070", date, start_date),
+            ("BAY", "GECAL", "HP", "11", "1122978", date, start_date)]
+    schema = StructType([
+        StructField("entity_code", StringType(), False),
+        StructField("company", StringType(), False),
+        StructField("product", StringType(), False),
+        StructField("branch", StringType(), False),
+        StructField("contract", StringType(), False),
+        StructField("data_date", StringType(), False),
+        StructField("start_date", StringType(), False),
+    ])
+    df = spark_session.createDataFrame(data, schema)
+    return df
+
+
+@pytest.fixture
+def mock_transaction_pst_df_w_keys_20211028(spark_session: pyspark.sql.SparkSession) -> pyspark.sql.dataframe.DataFrame:
+    start_date = '2021-10-28'
+    date = '641028'
+    data = [("AYCAL", "GECAL", "HP", "43", "BB00055", date, start_date),
+            ("AYCAL", "GECAL", "MC", "12", "AB77070", date, start_date),
+            ("BAY", "GECAL", "HP", "11", "1122978", date, start_date)]
+    schema = StructType([
+        StructField("entity_code", StringType(), False),
+        StructField("company", StringType(), False),
+        StructField("product", StringType(), False),
+        StructField("branch", StringType(), False),
+        StructField("contract", StringType(), False),
+        StructField("data_date", StringType(), False),
+        StructField("start_date", StringType(), False),
+    ])
+    df = spark_session.createDataFrame(data, schema)
+    return df
+
+
+def test_with_entity(mock_transaction_df_w_keys: pyspark.sql.dataframe.DataFrame,
+                     spark_session: pyspark.sql.SparkSession) -> pyspark.sql.dataframe.DataFrame:
+    mock_transaction_df_w_keys.show(truncate=False)
+    actual = DataFrameHelper().with_entity(mock_transaction_df_w_keys)
+    actual.show(truncate=False)
+    date = '2021-10-27'
+    data = [("BAY", "GECAL", "HP", "13", "1118860", date, 'KA'),
+            ("AYCAL", "GECAL", "HP", "11", "AB77053", date, 'AY'),
+            ("AYCAL", "GECAL", "MC", "12", "AB77070", date, 'AY'),
+            ("BAY", "GECAL", "HP", "11", "1122978", date, 'KA')]
+    schema = StructType([
+        StructField("entity_code", StringType(), False),
+        StructField("company_code", StringType(), False),
+        StructField("product_code", StringType(), False),
+        StructField("branch_code", StringType(), False),
+        StructField("contract_code", StringType(), False),
+        StructField("data_date", StringType(), False),
+        StructField("entity", StringType(), True)
+    ])
+    actual.printSchema()
+    expected = spark_session.createDataFrame(data, schema)
+    assert are_dfs_schema_equal(actual, expected)
+    assert are_dfs_data_equal(actual, expected)
+    spark_session.stop()
+
+
+@pytest.fixture
+def mock_lookup_product_keys(spark_session: pyspark.sql.SparkSession) -> pyspark.sql.dataframe.DataFrame:
+    date = '2021-10-27'
+    data = [("1234abc", "MC"),
+            ("567xyz", "HP")]
+    schema = StructType([
+        StructField("product_key", StringType(), False),
+        StructField("product_id", StringType(), False)
+    ])
+    df = spark_session.createDataFrame(data, schema)
+    return df
+
+
+def test_with_product_key(mock_transaction_df_w_keys: pyspark.sql.dataframe.DataFrame,
+                          mock_lookup_product_keys: pyspark.sql.dataframe.DataFrame,
+                          spark_session: pyspark.sql.SparkSession) -> pyspark.sql.dataframe.DataFrame:
+    mock_transaction_df_w_keys.show(truncate=False)
+    actual = DataFrameHelper().with_product_key(mock_transaction_df_w_keys, mock_lookup_product_keys)
+    actual.show(truncate=False)
+    date = '2021-10-27'
+    p1 = '567xyz'
+    p2 = '1234abc'
+    data = [("BAY", "GECAL", "HP", "13", "1118860", date, p1),
+            ("AYCAL", "GECAL", "HP", "11", "AB77053", date, p1),
+            ("BAY", "GECAL", "HP", "11", "1122978", date, p1),
+            ("AYCAL", "GECAL", "MC", "12", "AB77070", date, p2)]
+    schema = StructType([
+        StructField("entity_code", StringType(), False),
+        StructField("company_code", StringType(), False),
+        StructField("product_code", StringType(), False),
+        StructField("branch_code", StringType(), False),
+        StructField("contract_code", StringType(), False),
+        StructField("data_date", StringType(), False),
+        StructField("product_key", StringType(), True)
+    ])
+    actual.printSchema()
+    expected = spark_session.createDataFrame(data, schema)
+    assert are_dfs_schema_equal(actual, expected)
+    assert are_dfs_data_equal(actual, expected)
+    spark_session.stop()
+
+
+def test_with_branch_key(mock_transaction_df_w_keys: pyspark.sql.dataframe.DataFrame,
+                         spark_session: pyspark.sql.SparkSession) -> pyspark.sql.dataframe.DataFrame:
+    mock_transaction_df_w_keys.show(truncate=False)
+    transaction_w_entity_df = DataFrameHelper().with_entity(mock_transaction_df_w_keys)
+    transaction_w_entity_df.show(truncate=False)
+    transaction_w_gecid_df = DataFrameHelper().with_gecid(transaction_w_entity_df)
+    transaction_w_gecid_df.show(truncate=False)
+    actual = DataFrameHelper().with_branch_key(transaction_w_gecid_df)
+    actual.show(truncate=False)
+    date = '2021-10-27'
+    ka_entity = 'KA'
+    ay_entity = 'AY'
+    ka_gecid = '52800000'
+    ay_gecid = '60000000'
+    data = [("BAY", "GECAL", "HP", "13", "1118860", date, ka_entity, ka_gecid, '568b9ffc497efc1543c92f7c928bfdc8'),
+            ("AYCAL", "GECAL", "HP", "11", "AB77053", date, ay_entity, ay_gecid, '63f913db121dde37ba6f5e9186b8c65d'),
+            ("AYCAL", "GECAL", "MC", "12", "AB77070", date, ay_entity, ay_gecid, '0a04899648265150cd6d5f6081dc67a5'),
+            ("BAY", "GECAL", "HP", "11", "1122978", date, ka_entity, ka_gecid, 'eae08e28ce562a8fa2a20b4c92f284f8')]
+    ay_gecid = '60000000'
+    ka_gecid = '52800000'
+    schema = StructType([
+        StructField("entity_code", StringType(), False),
+        StructField("company_code", StringType(), False),
+        StructField("product_code", StringType(), False),
+        StructField("branch_code", StringType(), False),
+        StructField("contract_code", StringType(), False),
+        StructField("data_date", StringType(), False),
+        StructField("entity", StringType(), True),
+        StructField("gecid", StringType(), True),
+        StructField("branch_key", StringType(), True)
+    ])
+    actual.printSchema()
+    expected = spark_session.createDataFrame(data, schema)
+    assert are_dfs_schema_equal(actual, expected)
+    assert are_dfs_data_equal(actual, expected)
+    spark_session.stop()
+
+
+def test_with_account_key(mock_transaction_df_w_keys: pyspark.sql.dataframe.DataFrame,
+                          spark_session: pyspark.sql.SparkSession) -> None:
+    mock_transaction_df_w_keys.show(truncate=False)
+    transaction_w_account_df = DataFrameHelper().with_account(mock_transaction_df_w_keys)
+    transaction_w_account_df.show(truncate=False)
+    actual = DataFrameHelper().with_account_key(transaction_w_account_df)
+    actual.show(truncate=False)
+    date = '2021-10-27'
+    data = [("BAY", "GECAL", "HP", "13", "1118860", date, "1118860", '413d7ccfd29c29a9788812229d58b04c'),
+            ("AYCAL", "GECAL", "HP", "11", "AB77053", date, "AB77053", '1fb3718882e90b64b55e824961fe3080'),
+            ("AYCAL", "GECAL", "MC", "12", "AB77070", date, "AB77070", 'cbf006981d303927e3140e617ea1fceb'),
+            ("BAY", "GECAL", "HP", "11", "1122978", date, "1122978", '3d6cf29da9fa4142d4c1f1fe2fdf0e52')]
+    schema = StructType([
+        StructField("entity_code", StringType(), False),
+        StructField("company_code", StringType(), False),
+        StructField("product_code", StringType(), False),
+        StructField("branch_code", StringType(), False),
+        StructField("contract_code", StringType(), False),
+        StructField("data_date", StringType(), False),
+        StructField("account_code", StringType(), True),
+        StructField("account_key", StringType(), True)
+    ])
+    expected = spark_session.createDataFrame(data, schema)
+    assert are_dfs_schema_equal(actual, expected)
+    assert are_dfs_data_equal(actual, expected)
+    spark_session.stop()
+
+
+def test_rerun_with_table(mock_transaction_pst_df_w_keys: pyspark.sql.dataframe.DataFrame,
+                          mock_transaction_pst_df_w_keys_20211028: pyspark.sql.dataframe.DataFrame,
+                          mock_lookup_product_keys: pyspark.sql.dataframe.DataFrame,
+                          mock_month_key_df: pyspark.sql.dataframe.DataFrame,
+                          spark_session: pyspark.sql.SparkSession) -> None:
+    spark_session.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
+    spark_session.sparkContext.setCheckpointDir("/tmp/checkpoint")
+    config_path = '../sparkcore_test/helper/config/'
+    transaction_table_config = TableConfig(config_path, 'local', 'transaction')
+    transaction_table_property = TableProperty(db_name=transaction_table_config.db_name,
+                                               tb_name=transaction_table_config.tb_name,
+                                               table_path=transaction_table_config.table_path,
+                                               fields=transaction_table_config.fields,
+                                               partitions=transaction_table_config.partitions)
+    print(
+        transaction_table_property.create_table_sql(table_format=transaction_table_property.ORC_FORMAT, delimitor=None))
+    spark_writer = SparkWriter(spark_session)
+    spark_writer.create_table(transaction_table_property)
+    transaction_df = spark_session.table(f'{transaction_table_property.database}.{transaction_table_property.table}')
+    transaction_df.show(truncate=False)
+    mock_transaction_pst_df_w_keys.write \
+        .format("orc") \
+        .mode("overwrite") \
+        .partitionBy('start_date') \
+        .saveAsTable(f'{transaction_table_property.database}.{transaction_table_property.table}')
+    transaction_df = spark_session.table(f'{transaction_table_property.database}.{transaction_table_property.table}')
+    transaction_df.show(truncate=False)
+    snap_monthly_table_config = TableConfig(config_path, 'local', 'snap_monthly')
+    snap_monthly_table_property = TableProperty(db_name=snap_monthly_table_config.db_name,
+                                                tb_name=snap_monthly_table_config.tb_name,
+                                                table_path=snap_monthly_table_config.table_path,
+                                                fields=snap_monthly_table_config.fields,
+                                                partitions=snap_monthly_table_config.partitions)
+    print(
+        snap_monthly_table_property.create_table_sql(table_format=snap_monthly_table_property.ORC_FORMAT,
+                                                     delimitor=None))
+    spark_writer.create_table(snap_monthly_table_property)
+    snap_monthly_df = spark_session.table(f'{snap_monthly_table_property.database}.{snap_monthly_table_property.table}')
+    snap_monthly_df.show(truncate=False)
+
+    intermediate_transaction_df = transaction_df \
+        .withColumnRenamed("company", "company_code") \
+        .withColumnRenamed("product", "product_code") \
+        .withColumnRenamed("branch", "branch_code") \
+        .withColumnRenamed("contract", "account_code") \
+        .drop('start_date')
+    data_date = 'data_date'
+    intermediate_transaction_df = DataFrameHelper().data_date_convert(intermediate_transaction_df, data_date)
+    intermediate_transaction_df = DataFrameHelper().with_gecid(intermediate_transaction_df)
+    intermediate_transaction_df = DataFrameHelper().with_entity(intermediate_transaction_df)
+    intermediate_transaction_w_keys = DataFrameHelper() \
+        .with_all_keys(intermediate_transaction_df, mock_lookup_product_keys) \
+        .withColumn("contract_code", col("account_code")) \
+        .drop("account_code") \
+        .drop("entity") \
+        .drop("gecid")
+    intermediate_transaction_w_keys.show(truncate=False)
+    intermediate_transaction_w_keys.printSchema()
+    status_column = 'is_active'
+    account_key = 'account_key'
+    product_key = 'product_key'
+    branch_key = 'branch_key'
+    process_date = '2021-10-27'
+    today_date = '2021-10-28'
+    key_columns = [account_key, product_key, branch_key]
+    snap_month_tb = f'{snap_monthly_table_property.database}.{snap_monthly_table_property.table}'
+    DataFrameHelper().update_insert_status_snap_monthly_to_table(intermediate_transaction_w_keys,
+                                                                 status_column,
+                                                                 key_columns,
+                                                                 process_date,
+                                                                 today_date,
+                                                                 month_key_df=mock_month_key_df,
+                                                                 data_date_col_name=data_date,
+                                                                 spark_session=spark_session,
+                                                                 snap_month_table=snap_month_tb)
+    snap_monthly_cond1 = spark_session.table(
+        f'{snap_monthly_table_property.database}.{snap_monthly_table_property.table}')
+    snap_monthly_cond1.show(truncate=False)
+
+    transaction_df.show(truncate=False)
+    mock_transaction_pst_df_w_keys_20211028.write \
+        .format("orc") \
+        .mode("overwrite") \
+        .insertInto(f'{transaction_table_property.database}.{transaction_table_property.table}')
+    process_date = '2021-10-28'
+    today_date = '2021-10-29'
+    transaction_df = spark_session.table(f'{transaction_table_property.database}.{transaction_table_property.table}')
+    transaction_df.show(truncate=False)
+
+    intermediate_transaction_df = transaction_df \
+        .withColumnRenamed("company", "company_code") \
+        .withColumnRenamed("product", "product_code") \
+        .withColumnRenamed("branch", "branch_code") \
+        .withColumnRenamed("contract", "account_code") \
+        .drop('start_date')
+    data_date = 'data_date'
+    intermediate_transaction_df = DataFrameHelper().data_date_convert(intermediate_transaction_df, data_date)
+    intermediate_transaction_df.show(truncate=False)
+        # .where(col(data_date) == process_date)
+    intermediate_transaction_df = DataFrameHelper().with_gecid(intermediate_transaction_df)
+    intermediate_transaction_df = DataFrameHelper().with_entity(intermediate_transaction_df)
+    intermediate_transaction_w_keys = DataFrameHelper() \
+        .with_all_keys(intermediate_transaction_df, mock_lookup_product_keys) \
+        .withColumn("contract_code", col("account_code")) \
+        .drop("account_code") \
+        .drop("entity") \
+        .drop("gecid")
+    intermediate_transaction_w_keys.show(truncate=False)
+
+    snap_monthly_cond2 = DataFrameHelper().update_insert_status_snap_monthly(intermediate_transaction_w_keys,
+                                                                             snap_monthly_cond1,
+                                                                             status_column,
+                                                                             key_columns,
+                                                                             process_date,
+                                                                             today_date,
+                                                                             month_key_df=mock_month_key_df,
+                                                                             data_date_col_name=data_date)
+    # snap_monthly_cond2 = spark_session.table(
+    #     f'{snap_monthly_table_property.database}.{snap_monthly_table_property.table}')
+    snap_monthly_cond2.show(truncate=False)
