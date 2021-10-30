@@ -94,9 +94,7 @@ class DataFrameHelper:
                 .withColumn(cls.MONTH_KEY, lit(0).cast(IntegerType())) \
                 .withColumn(status_column, lit(cls.ACTIVE)) \
                 .selectExpr(snap_monthly_df_cols)
-            writed_df.show(truncate=False)
-            writed_df.printSchema()
-            print("hello")
+
             writed_df.write.format("orc").insertInto(snap_month_table, overwrite=True)
         else:
             current_snap_month = \
@@ -107,18 +105,22 @@ class DataFrameHelper:
 
             if DateHelper().date_str_num_month_diff(process_date, current_snap_month) > 0:
                 # It should update the month key
+                print("start: update on month key")
                 updated_month_key_df = cls.update_month_key_zero(snap_monthly_df, month_key_df, data_date_col_name)
-                updated_month_key_df.write.format("orc").insertInto(snap_month_table, overwrite=True)
+                updated_month_key_df.selectExpr(snap_monthly_df_cols) \
+                    .write.format("orc").insertInto(snap_month_table, overwrite=True)
                 # process_date is in monthkey = 0
-                temp_df = transaction_df \
+                transaction_df \
                     .where(col(data_date_col_name) == process_date) \
                     .withColumn(cls.UPDATE_DATE, lit(today_date)) \
                     .withColumn(cls.MONTH_KEY, lit(0)) \
                     .withColumn(status_column, lit(cls.ACTIVE)) \
+                    .selectExpr(snap_monthly_df_cols) \
                     .write.format("orc").insertInto(snap_month_table, overwrite=True)
+                print("start: update on month key")
             # elif DateHelper().date_str_num_month_diff(process_date, current_snap_month) < 0:
             else:
-                # this process_date is not in monthkey = 0 but it is in another monthkey
+                print("start: month key = 0")
                 target_month_key = cls.find_month_key_of_process_date(process_date, snap_monthly_df, data_date_col_name)
                 # rerun the whole monthkey
                 transaction_of_month_key = transaction_df.where(col(data_date_col_name) == process_date) \
@@ -128,15 +130,15 @@ class DataFrameHelper:
                     .withColumnRenamed(data_date_col_name, cls.TRANSACTION_START_DATE)
                 if cls.MONTH_KEY not in key_columns:
                     key_columns.append(cls.MONTH_KEY)
-                non_target_month_key_df = snap_monthly_df.where(col(cls.MONTH_KEY) != target_month_key)
                 target_snap_month_key_df = snap_monthly_df.where(col(cls.MONTH_KEY) == target_month_key).cache()
                 # target_month_key_df.show(truncate=False)
                 updated_df = cls.update_insert(transaction_df=transaction_of_month_key,
                                                snap_monthly_df=target_snap_month_key_df, status_column=status_column,
                                                key_columns=key_columns, data_date_col_name=data_date_col_name,
-                                               additional_cols="")
-                updated_df.show(truncate=False)
-                updated_df.write.insertInto(snap_month_table, overwrite=True)
+                                               additional_cols=[cls.UPDATE_DATE, data_date_col_name, status_column])
+                updated_df.selectExpr(snap_monthly_df_cols) \
+                    .write.insertInto(snap_month_table, overwrite=True)
+                print("end: month key = 0")
 
     def update_insert_status_snap_monthly(cls, transaction_df: pyspark.sql.dataframe.DataFrame,
                                           snap_monthly_df: pyspark.sql.dataframe.DataFrame,
@@ -194,6 +196,7 @@ class DataFrameHelper:
                                                key_columns=key_columns, data_date_col_name=data_date_col_name,
                                                additional_cols=[cls.UPDATE_DATE, data_date_col_name, status_column])
                 updated_df.show(truncate=False)
+
                 return updated_df  # non_target_month_key_df.unionByName(updated_df)
 
     def does_month_exist(cls, process_date: str, snap_monthly_df: pyspark.sql.dataframe.DataFrame,
