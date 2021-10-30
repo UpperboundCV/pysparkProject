@@ -6,7 +6,7 @@ from sparkcore.helper.DataFrameHelper import DataFrameHelper
 from sparkcore.helper.DateHelper import DateHelper
 import pyspark
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType, DoubleType
-from pyspark.sql.functions import col
+from pyspark.sql.functions import col, lit
 from sys import platform
 from sparkcore.writer.TableProperty import TableProperty
 from sparkcore.ColumnDescriptor import ColumnDescriptor
@@ -758,8 +758,8 @@ def test_rerun_with_table(mock_transaction_pst_df_w_keys: pyspark.sql.dataframe.
     snap_monthly_cond1 = spark_session.table(
         f'{snap_monthly_table_property.database}.{snap_monthly_table_property.table}')
     snap_monthly_cond1.show(truncate=False)
-
-    transaction_df.show(truncate=False)
+    # ==========end first time insert into snap monthly ================================================================
+    # ==========start update snap monthly with 20211028 ================================================================
     mock_transaction_pst_df_w_keys_20211028.write \
         .format("orc") \
         .mode("overwrite") \
@@ -778,7 +778,7 @@ def test_rerun_with_table(mock_transaction_pst_df_w_keys: pyspark.sql.dataframe.
     data_date = 'data_date'
     intermediate_transaction_df = DataFrameHelper().data_date_convert(intermediate_transaction_df, data_date)
     intermediate_transaction_df.show(truncate=False)
-        # .where(col(data_date) == process_date)
+    # .where(col(data_date) == process_date)
     intermediate_transaction_df = DataFrameHelper().with_gecid(intermediate_transaction_df)
     intermediate_transaction_df = DataFrameHelper().with_entity(intermediate_transaction_df)
     intermediate_transaction_w_keys = DataFrameHelper() \
@@ -787,6 +787,7 @@ def test_rerun_with_table(mock_transaction_pst_df_w_keys: pyspark.sql.dataframe.
         .drop("account_code") \
         .drop("entity") \
         .drop("gecid")
+    print("transaction with joining keys")
     intermediate_transaction_w_keys.show(truncate=False)
 
     snap_monthly_cond2 = DataFrameHelper().update_insert_status_snap_monthly(intermediate_transaction_w_keys,
@@ -800,3 +801,129 @@ def test_rerun_with_table(mock_transaction_pst_df_w_keys: pyspark.sql.dataframe.
     # snap_monthly_cond2 = spark_session.table(
     #     f'{snap_monthly_table_property.database}.{snap_monthly_table_property.table}')
     snap_monthly_cond2.show(truncate=False)
+
+
+@pytest.fixture
+def mock_intermediate_mix_two_days_data_with_keys(
+        spark_session: pyspark.sql.SparkSession) -> pyspark.sql.dataframe.DataFrame:
+    date20211027 = '2021-10-27'
+    date20211028 = '2021-10-28'
+    bay_entity = 'BAY'
+    aycal_entity = 'AYCAL'
+    company_code = 'GECAL'
+    hp_code = 'HP'
+    mc_code = 'MC'
+    product_key1 = '567xyz'
+    product_key2 = '1234abc'
+    data = [(bay_entity, company_code, hp_code, '13', date20211027, product_key1, '568b9ffc497efc1543c92f7c928bfdc8',
+             '413d7ccfd29c29a9788812229d58b04c', '1118860'),
+            (bay_entity, company_code, hp_code, '11', date20211027, product_key1, 'eae08e28ce562a8fa2a20b4c92f284f8',
+             '3d6cf29da9fa4142d4c1f1fe2fdf0e52', '1122978'),
+            (bay_entity, company_code, hp_code, '11', date20211028, product_key1, 'eae08e28ce562a8fa2a20b4c92f284f8',
+             '3d6cf29da9fa4142d4c1f1fe2fdf0e52', '1122978'),
+            (aycal_entity, company_code, hp_code, '43', date20211028, product_key1, '3c0a855ab5fc9f4276a16f4c37961adf',
+             '116781c1ce55d6cd0be159f56e18760e', 'BB00055'),
+            (aycal_entity, company_code, hp_code, '11', date20211027, product_key1, '63f913db121dde37ba6f5e9186b8c65d',
+             '1fb3718882e90b64b55e824961fe3080', 'AB77053'),
+            (aycal_entity, company_code, mc_code, '12', date20211027, product_key2, '0a04899648265150cd6d5f6081dc67a5',
+             'cbf006981d303927e3140e617ea1fceb', 'AB77070'),
+            (aycal_entity, company_code, mc_code, '12', date20211028, product_key2, '0a04899648265150cd6d5f6081dc67a5',
+             'cbf006981d303927e3140e617ea1fceb', 'AB77070')]
+    schema = StructType([
+        StructField("entity_code", StringType(), False),
+        StructField("company_code", StringType(), False),
+        StructField("product_code", StringType(), False),
+        StructField("branch_code", StringType(), False),
+        StructField("data_date", StringType(), False),
+        StructField("product_key", StringType(), False),
+        StructField("branch_key", StringType(), False),
+        StructField("account_key", StringType(), False),
+        StructField("contract_code", StringType(), False)
+    ])
+    df = spark_session.createDataFrame(data, schema)
+    return df
+
+
+@pytest.fixture
+def mock_snap_monthly_with_keys(spark_session: pyspark.sql.SparkSession) -> pyspark.sql.dataframe.DataFrame:
+    date20211027 = '2021-10-27'
+    date20211028 = '2021-10-28'
+    bay_entity = 'BAY'
+    aycal_entity = 'AYCAL'
+    company_code = 'GECAL'
+    hp_code = 'HP'
+    mc_code = 'MC'
+    product_key1 = '567xyz'
+    product_key2 = '1234abc'
+    active = 'active'
+    data = [(bay_entity, company_code, hp_code, '13', '1118860', '413d7ccfd29c29a9788812229d58b04c', product_key1,
+             '568b9ffc497efc1543c92f7c928bfdc8', date20211027, date20211028, active, 0),
+            (bay_entity, company_code, hp_code, '11', '1122978', '3d6cf29da9fa4142d4c1f1fe2fdf0e52', product_key1,
+             'eae08e28ce562a8fa2a20b4c92f284f8', date20211027, date20211028, active, 0),
+            (aycal_entity, company_code, hp_code, '11', 'AB77053', '1fb3718882e90b64b55e824961fe3080', product_key1,
+             '0a04899648265150cd6d5f6081dc67a5', date20211027, date20211028, active, 0),
+            (aycal_entity, company_code, mc_code, '12', 'AB77070', 'cbf006981d303927e3140e617ea1fceb', product_key2,
+             '0a04899648265150cd6d5f6081dc67a5', date20211027, date20211028, active, 0)]
+    schema = StructType([
+        StructField("entity_code", StringType(), False),
+        StructField("company_code", StringType(), False),
+        StructField("product_code", StringType(), False),
+        StructField("branch_code", StringType(), False),
+        StructField("contract_code", StringType(), False),
+        StructField("account_key", StringType(), False),
+        StructField("product_key", StringType(), False),
+        StructField("branch_key", StringType(), False),
+        StructField("data_date", StringType(), False),
+        StructField("update_date", StringType(), False),
+        StructField("is_active", StringType(), False),
+        StructField("month_key", IntegerType(), False)])
+    df = spark_session.createDataFrame(data, schema)
+    return df
+
+
+def test_update_insert(mock_intermediate_mix_two_days_data_with_keys: pyspark.sql.dataframe.DataFrame,
+                       mock_snap_monthly_with_keys: pyspark.sql.dataframe.DataFrame,
+                       spark_session: pyspark.sql.SparkSession) -> pyspark.sql.dataframe.DataFrame:
+    print('transaction df')
+    mock_intermediate_mix_two_days_data_with_keys.show(truncate=False)
+    print('snap month df')
+    mock_snap_monthly_with_keys.show(truncate=False)
+    data_date_col_name = 'data_date'
+    LAST_UPDATE_DATE = 'last_update_date'
+    MONTH_KEY = 'month_key'
+    CURRENT_STATUS = 'current_status'
+    TRANSACTION_START_DATE = 'transaction_start_date'
+    process_date = '2021-10-28'
+    today_date = '2021-10-29'
+    target_month_key = 0
+    ACTIVE = 'active'
+    IS_ACTIVE = 'is_active'
+    key_columns = ['account_key', 'product_key', 'branch_key', MONTH_KEY]
+    UPDATE_DATE = 'update_date'
+
+    transaction_of_month_key = mock_intermediate_mix_two_days_data_with_keys \
+        .where(col(data_date_col_name) == process_date) \
+        .withColumn(LAST_UPDATE_DATE, lit(today_date)) \
+        .withColumn(MONTH_KEY, lit(target_month_key)) \
+        .withColumn(CURRENT_STATUS, lit(ACTIVE)) \
+        .withColumnRenamed(data_date_col_name, TRANSACTION_START_DATE)
+    print('transaction with addition columns df')
+    transaction_of_month_key.show(truncate=False)
+    target_snap_month_key_df = mock_snap_monthly_with_keys.where(col(MONTH_KEY) == target_month_key).cache()
+    additional_cols = [UPDATE_DATE, data_date_col_name, IS_ACTIVE]
+    updated_df = DataFrameHelper().update_insert(transaction_df=transaction_of_month_key,
+                                                 snap_monthly_df=target_snap_month_key_df, status_column=IS_ACTIVE,
+                                                 key_columns=key_columns, data_date_col_name=data_date_col_name,
+                                                 additional_cols=additional_cols)
+    print('final result')
+    updated_df.show(truncate=False)
+    additional_cols = [UPDATE_DATE, data_date_col_name, IS_ACTIVE]
+    main_cols = key_columns + additional_cols
+    print('transaction_df :' + ','.join(transaction_of_month_key.columns))
+    print('snap_monthly_df:' + ','.join(mock_snap_monthly_with_keys.columns))
+    # print('result_df:' + ','.join(updated_df.columns))
+    minor_col_expr = [f'coalesce(base.{minor_col}, current.{minor_col}) as ' + minor_col for minor_col in
+                      mock_snap_monthly_with_keys.columns if minor_col not in main_cols]
+    print(','.join(minor_col_expr))
+    select_expr = main_cols + minor_col_expr
+    print(','.join(select_expr))
