@@ -137,6 +137,19 @@ def intermediate_df(transaction_df: pyspark.sql.dataframe.DataFrame,
         .withColumnRenamed("product", "product_code") \
         .withColumnRenamed("branch", "branch_code") \
         .withColumnRenamed("contract", "account_code") \
+        .withColumnRenamed("engine_no", "engine_number") \
+        .withColumnRenamed("body", "body_number") \
+        .withColumnRenamed("od_amount", "overdue_amount") \
+        .withColumnRenamed("os_balance", "outstanding_balance") \
+        .withColumnRenamed("due", "payment_due_date") \
+        .withColumnRenamed("haircut_reason_desc", "haircut_reason_description") \
+        .withColumnRenamed("last_paydate", "last_pay_date") \
+        .withColumnRenamed("last_payperiod", "last_pay_period") \
+        .withColumnRenamed("no_period_passdue", "number_period_pass_due") \
+        .withColumnRenamed("bill_code_wo", "bill_code_scom") \
+        .withColumnRenamed("bill_desc_wo", "bill_code_scom_description") \
+        .withColumnRenamed("overdue_threshold", "collection_overdue_threshold") \
+        .withColumnRenamed("req_flag", "ocpb_flag") \
         .drop('start_date')
     data_date = 'data_date'
     intermediate_transaction_df = DataFrameHelper().data_date_convert(intermediate_transaction_df, data_date)
@@ -168,10 +181,15 @@ if __name__ == '__main__':
     source_txt_path4 = '../pysparkProject/sparkcore/irepo/data/aycal_irepo_pool_20211023_134949.txt'
     source_txt_path5 = '../pysparkProject/sparkcore/irepo/data/aycal_irepo_pool_20211030_135026.txt'
     source_txt_path6 = '../pysparkProject/sparkcore/irepo/data/aycal_irepo_pool_20211031_135108.txt'
+    source_txt_path7 = '../pysparkProject/sparkcore/irepo/data/aycal_irepo_pool_20211101_082844.txt'
+    source_txt_path8 = '../pysparkProject/sparkcore/irepo/data/aycal_irepo_pool_20211102_082929.txt'
+    source_txt_path9 = '../pysparkProject/sparkcore/irepo/data/aycal_irepo_pool_20211103_082955.txt'
     source_txt_paths = [source_txt_path1, source_txt_path2, source_txt_path3, source_txt_path4, source_txt_path5,
-                        source_txt_path6]
-    process_date_lst = ['2021-10-20', '2021-10-21', '2021-10-22', '2021-10-23', '2021-10-30', '2021-10-31']
-    today_date_lst = ['2021-10-21', '2021-10-22', '2021-10-23', '2021-10-30', '2021-10-31', '2021-11-01']
+                        source_txt_path6, source_txt_path7, source_txt_path8, source_txt_path9]
+    process_date_lst = ['2021-10-20', '2021-10-21', '2021-10-22', '2021-10-23', '2021-10-30', '2021-10-31',
+                        '2021-11-01', '2021-11-02', '2021-11-03']
+    today_date_lst = ['2021-10-21', '2021-10-22', '2021-10-23', '2021-10-30', '2021-10-31', '2021-11-01', '2021-11-02',
+                      '2021-11-03', '2021-11-04']
     dfs = [irepo_transaction_df(spark_session=spark_core.spark_session, source_txt_path=source_txt_paths[i],
                                 process_date=process_date_lst[i], today_date=today_date_lst[i]) for i in
            range(len(process_date_lst))]
@@ -244,18 +262,23 @@ if __name__ == '__main__':
     month_key_df = mock_month_key_df(spark_session=spark_core.spark_session)
     snap_monthly_table = f"{snap_monthly_table_property.database}.{snap_monthly_table_property.table}"
 
-    current_process_date = process_date_lst[0]
-    current_today_date = today_date_lst[0]
-    DataFrameHelper().update_insert_status_snap_monthly_to_table(transaction_df=intermediate_transaction_df,
-                                                                 status_column=status_column,
-                                                                 key_columns=key_columns,
-                                                                 process_date=current_process_date,
-                                                                 today_date=current_today_date,
-                                                                 month_key_df=month_key_df,
-                                                                 data_date_col_name=data_date_col,
-                                                                 spark_session=spark_core.spark_session,
-                                                                 snap_month_table=snap_monthly_table)
+    for i in range(len(process_date_lst)):
+        current_process_date = process_date_lst[i]
+        current_today_date = today_date_lst[i]
+        DataFrameHelper().update_insert_status_snap_monthly_to_table(transaction_df=intermediate_transaction_df,
+                                                                     status_column=status_column,
+                                                                     key_columns=key_columns,
+                                                                     process_date=current_process_date,
+                                                                     today_date=current_today_date,
+                                                                     month_key_df=month_key_df,
+                                                                     data_date_col_name=data_date_col,
+                                                                     spark_session=spark_core.spark_session,
+                                                                     snap_month_table=snap_monthly_table)
 
     snap_monthly_final = spark_core.spark_session.table(
         f'{snap_monthly_table_property.database}.{snap_monthly_table_property.table}')
     snap_monthly_final.show(truncate=False)
+
+    snap_monthly_final.groupBy(data_date_col, 'update_date',status_column, 'month_key').agg(
+        count("*")).orderBy('month_key', data_date_col,
+                                                                          status_column).show(truncate=False)
