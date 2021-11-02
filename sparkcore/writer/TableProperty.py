@@ -10,9 +10,9 @@ class TableProperty:
                  table_path: str,
                  fields: Any,
                  partitions: Any = None) -> None:
-        self.database = db_name.__getitem__(0)
-        self.table = tb_name.__getitem__(0)
-        self.table_path = table_path.__getitem__(0)
+        self.database = db_name
+        self.table = tb_name
+        self.table_path = table_path
         self.partition_by = partitions
         self.column_descriptions = fields
 

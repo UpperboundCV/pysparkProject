@@ -12,17 +12,18 @@ class TableConfig(ConfigProvider):
     TB_PATH: str = 'table_path'
     PARTITIONS: str = 'partitions'
     FIELDS: str = 'fields'
+    CHECK_POINT_PATH: str = 'checkpoint_path'
 
     def __init__(self, config_path: str, mode: str, table_name: str) -> None:
         super().__init__(config_path, mode)
-        self.db_name = self.config[table_name].get(self.DB),
-        self.tb_name = self.config[table_name].get(self.TB),
-        self.table_path = self.config[table_name].get(self.TB_PATH),
-        self.fields = self.to_column_description(self.config.get(table_name, self.FIELDS)),
+        self.db_name = self.config[table_name].get(self.DB)
+        self.tb_name = self.config[table_name].get(self.TB)
+        self.table_path = self.config.get(table_name, self.TB_PATH, fallback=None)
+        self.fields = self.to_column_description(self.config.get(table_name, self.FIELDS, fallback=None)),
         self.partitions = self.to_column_description(self.config.get(table_name, self.PARTITIONS, fallback=None))
+        self.check_point_path = self.config.get(table_name, self.CHECK_POINT_PATH, fallback=None)
 
     def to_column_description(self, column_descriptions: str) -> Optional[List[ColumnDescriptor]]:
-        print(column_descriptions)
         if column_descriptions is None:
             return None
         else:

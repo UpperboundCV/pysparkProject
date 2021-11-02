@@ -3,7 +3,7 @@ import sys
 from functools import reduce
 
 sys.path.append('/home/up_python/PycharmProjects/pysparkProject/sparkcore')
-os.environ['PYTHONPATH'] = '/home/up_python/PycharmProjects/pysparkProject/sparkcore'
+# os.environ['PYTHONPATH'] = '/home/up_python/PycharmProjects/pysparkProject/sparkcore'
 from reader.SparkReader import SparkReader
 from SparkCore import SparkCore
 from helper.DataFrameHelper import DataFrameHelper
