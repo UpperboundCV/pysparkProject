@@ -77,6 +77,7 @@ if __name__ == '__main__':
     try:
         if args['env'] == 'dev' or args['env'] == 'prod':
             env = args['env']
+            process_date = args['process_date']
             config_path = "../irepo/config/"
             transaction_table_config = TableConfig(config_path, env, 'pool_list_persist')
             transaction_table = f'{transaction_table_config.db_name}.{transaction_table_config.tb_name}'
@@ -86,7 +87,7 @@ if __name__ == '__main__':
             ka_product_key_table = f'{ka_product_key_config.db_name}.{ka_product_key_config.tb_name}'
             ay_product_key_config = TableConfig(config_path, env, 'ay_product_key')
             ay_product_key_table = f'{ay_product_key_config.db_name}.{ay_product_key_config.tb_name}'
-            spark_core = SparkCore(env)
+            spark_core = SparkCore(env, f"irepo_{process_date}")
             spark_core.spark_session.sparkContext.setCheckpointDir(snap_monthly_table_config.check_point_path)
             raw_transaction_df = spark_core.spark_session.table(transaction_table)
             raw_transaction_df.show(truncate=False)
