@@ -22,7 +22,7 @@ if __name__ == '__main__':
     ap.add_argument("-e", "--env", required=True, help="environment: local, dev, or prod")
     args = vars(ap.parse_args())
 
-    config_path = "../irepo/config/"
+    config_path = "/config/"
     try:
         spark_core = SparkCore(args['env'])
         snap_monthly_table_config = TableConfig(config_path, args['env'], 'pool_list_curate')

@@ -175,15 +175,15 @@ if __name__ == '__main__':
     spark_core.spark_session.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
     spark_core.spark_session.sparkContext.setCheckpointDir("/tmp/checkpoint")
     spark_reader = SparkReader(spark_core.spark_session)
-    source_txt_path1 = '../pysparkProject/sparkcore/irepo/data/aycal_irepo_pool_20211020_134420.txt'
-    source_txt_path2 = '../pysparkProject/sparkcore/irepo/data/aycal_irepo_pool_20211021_134522.txt'
-    source_txt_path3 = '../pysparkProject/sparkcore/irepo/data/aycal_irepo_pool_20211022_134913.txt'
-    source_txt_path4 = '../pysparkProject/sparkcore/irepo/data/aycal_irepo_pool_20211023_134949.txt'
-    source_txt_path5 = '../pysparkProject/sparkcore/irepo/data/aycal_irepo_pool_20211030_135026.txt'
-    source_txt_path6 = '../pysparkProject/sparkcore/irepo/data/aycal_irepo_pool_20211031_135108.txt'
-    source_txt_path7 = '../pysparkProject/sparkcore/irepo/data/aycal_irepo_pool_20211101_082844.txt'
-    source_txt_path8 = '../pysparkProject/sparkcore/irepo/data/aycal_irepo_pool_20211102_082929.txt'
-    source_txt_path9 = '../pysparkProject/sparkcore/irepo/data/aycal_irepo_pool_20211103_082955.txt'
+    source_txt_path1 = '../pysparkProject/sparkcore/pool_list/data/aycal_irepo_pool_20211020_134420.txt'
+    source_txt_path2 = '../pysparkProject/sparkcore/pool_list/data/aycal_irepo_pool_20211021_134522.txt'
+    source_txt_path3 = '../pysparkProject/sparkcore/pool_list/data/aycal_irepo_pool_20211022_134913.txt'
+    source_txt_path4 = '../pysparkProject/sparkcore/pool_list/data/aycal_irepo_pool_20211023_134949.txt'
+    source_txt_path5 = '../pysparkProject/sparkcore/pool_list/data/aycal_irepo_pool_20211030_135026.txt'
+    source_txt_path6 = '../pysparkProject/sparkcore/pool_list/data/aycal_irepo_pool_20211031_135108.txt'
+    source_txt_path7 = '../pysparkProject/sparkcore/pool_list/data/aycal_irepo_pool_20211101_082844.txt'
+    source_txt_path8 = '../pysparkProject/sparkcore/pool_list/data/aycal_irepo_pool_20211102_082929.txt'
+    source_txt_path9 = '../pysparkProject/sparkcore/pool_list/data/aycal_irepo_pool_20211103_082955.txt'
     source_txt_paths = [source_txt_path1, source_txt_path2, source_txt_path3, source_txt_path4, source_txt_path5,
                         source_txt_path6, source_txt_path7, source_txt_path8, source_txt_path9]
     process_date_lst = ['2021-10-20', '2021-10-21', '2021-10-22', '2021-10-23', '2021-10-30', '2021-10-31',
@@ -231,7 +231,7 @@ if __name__ == '__main__':
     # | 2021 - 10 - 31 | 8280 |
     # +----------+-----+
 
-    config_path = "../irepo/config/"
+    config_path = "../pool_list/config/"
     snap_monthly_table_config = TableConfig(config_path, 'local', 'pool_list_curate')
     snap_monthly_table_property = TableProperty(db_name=snap_monthly_table_config.db_name,
                                                 tb_name=snap_monthly_table_config.tb_name,

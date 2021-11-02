@@ -1,5 +1,5 @@
 # --------------------------------------------------
-# OBJECTIVE : irepo pyspark
+# OBJECTIVE : pool_list pyspark
 # CREATE BY : Krisorn Chunhapongpipat [UP]
 # CREATE DATE : 2021/11/02
 # --------------------------------------------------
@@ -78,7 +78,7 @@ if __name__ == '__main__':
         if args['env'] == 'dev' or args['env'] == 'prod':
             env = args['env']
             process_date = args['process_date']
-            config_path = "../irepo/config/"
+            config_path = "/config/"
             transaction_table_config = TableConfig(config_path, env, 'pool_list_persist')
             transaction_table = f'{transaction_table_config.db_name}.{transaction_table_config.tb_name}'
             snap_monthly_table_config = TableConfig(config_path, env, 'pool_list_curate')
