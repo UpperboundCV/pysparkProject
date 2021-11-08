@@ -10,9 +10,9 @@ except:# for sparkcore_test
 class SparkCore:
     is_error = False
 
-    def __init__(self, mode: str) -> None:
+    def __init__(self, mode: str, job_name:str="") -> None:
         try:
-            conf_provider = SparkEnvConfig(mode=mode)
+            conf_provider = SparkEnvConfig(mode=mode,job_name=job_name)
             self.spark_conf = SparkConf().setAll(pairs=conf_provider.get_spark_configs())
             self.spark_session = SparkSession \
                 .builder \

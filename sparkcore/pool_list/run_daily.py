@@ -14,7 +14,7 @@ os.environ["SPARK_HOME"] = "/opt/cloudera/parcels/CDH/lib/spark/"
 os.environ["PYTHONPATH"] = "/opt/cloudera/parcels/CDH/lib/spark/python"
 os.environ["JAVA_HOME"] = "/usr/java/jdk1.8.0_232-cloudera/"
 sys.path.append("/opt/cloudera/parcels/CDH/lib/spark/python")
-sys.path.append('/home/up_python/PycharmProjects/pysparkProject/sparkcore')
+sys.path.append('/nfs/msa/dapscripts/ka/pln/dev/tfm/pys/collection/irepo/sparkcore')
 sys.path.append("/opt/cloudera/parcels/CDH/lib/spark/python/lib/py4j-0.10.7-src.zip")
 from reader.SparkReader import SparkReader
 from SparkCore import SparkCore
@@ -25,11 +25,11 @@ from writer.SparkWriter import SparkWriter
 from pyspark.sql.types import StructType, StructField, StringType, DateType, TimestampType, IntegerType, IntegralType, \
     DoubleType
 from pyspark.sql.functions import lit, col
+import pyspark
 from typing import List
 from sys import platform
+from datetime import datetime
 
-if platform == 'linux':
-    os.environ["JAVA_HOME"] = "/usr/lib/jvm/java-8-openjdk-amd64/"
 
 def intermediate_df(transaction_df: pyspark.sql.dataframe.DataFrame,
                     product_keys_df: pyspark.sql.dataframe.DataFrame) -> pyspark.sql.dataframe.DataFrame:
@@ -78,9 +78,11 @@ if __name__ == '__main__':
         if args['env'] == 'dev' or args['env'] == 'prod':
             env = args['env']
             process_date = args['process_date']
-            config_path = "/config/"
-            transaction_table_config = TableConfig(config_path, env, 'pool_list_persist')
-            transaction_table = f'{transaction_table_config.db_name}.{transaction_table_config.tb_name}'
+            config_path = "../pool_list/config/"
+            ka_transaction_table_config = TableConfig(config_path, env, 'ka_pool_list_persist')
+            ka_transaction_table = f'{ka_transaction_table_config.db_name}.{ka_transaction_table_config.tb_name}'
+            ay_transaction_table_config = TableConfig(config_path, env, 'ay_pool_list_persist')
+            ay_transaction_table = f'{ay_transaction_table_config.db_name}.{ay_transaction_table_config.tb_name}'
             snap_monthly_table_config = TableConfig(config_path, env, 'pool_list_curate')
             snap_month_table = f'{snap_monthly_table_config.db_name}.{snap_monthly_table_config.tb_name}'
             ka_product_key_config = TableConfig(config_path, env, 'ka_product_key')
@@ -88,14 +90,73 @@ if __name__ == '__main__':
             ay_product_key_config = TableConfig(config_path, env, 'ay_product_key')
             ay_product_key_table = f'{ay_product_key_config.db_name}.{ay_product_key_config.tb_name}'
             spark_core = SparkCore(env, f"irepo_{process_date}")
+            os.system(f'hdfs dfs -mkdir -p {snap_monthly_table_config.check_point_path}')
             spark_core.spark_session.sparkContext.setCheckpointDir(snap_monthly_table_config.check_point_path)
-            raw_transaction_df = spark_core.spark_session.table(transaction_table)
+            raw_ka_transaction_df = spark_core.spark_session.table(ka_transaction_table)
+            raw_ka_transaction_df.show(truncate=False)
+            raw_ay_transaction_df = spark_core.spark_session.table(ay_transaction_table)
+            raw_ay_transaction_df.show(truncate=False)
+            raw_transaction_df = raw_ka_transaction_df.unionByName(raw_ay_transaction_df)
             raw_transaction_df.show(truncate=False)
             # todo: check whether ka_month_key and ay_month_key have duplicated key to each other or not.
             ka_product_key_df = spark_core.spark_session.table(ka_product_key_table)
             ay_product_key_df = spark_core.spark_session.table(ay_product_key_table)
             product_key_df = ka_product_key_df.unionByName(ay_product_key_df)
             product_key_df.show(truncate=False)
+            intermediate_transaction_df = intermediate_df(transaction_df  = raw_transaction_df,
+                                                          product_keys_df = product_key_df)
+            intermediate_transaction_df.show(truncate=False) 
+            snap_monthly_table_config = TableConfig(config_path, env, 'pool_list_curate')
+            snap_monthly_table_property = TableProperty(db_name=snap_monthly_table_config.db_name,
+                                                        tb_name=snap_monthly_table_config.tb_name,
+                                                        table_path=snap_monthly_table_config.table_path,
+                                                        fields=snap_monthly_table_config.fields,
+                                                        partitions=snap_monthly_table_config.partitions)
+            print(snap_monthly_table_property.database)
+            print(snap_monthly_table_property.table)
+            print(snap_monthly_table_property.table_path)
+            print(snap_monthly_table_property.create_table_sql(table_format=snap_monthly_table_property.ORC_FORMAT,
+                                                               delimitor=None))
+            #snap_monthly_writer=SparkWriter(spark_core.spark_session)
+            #snap_monthly_writer.create_table(snap_monthly_table_property)
+            snap_monthly_db = f'{snap_monthly_table_property.database}'
+            snap_monthly_tb = f'{snap_monthly_table_property.table}'
+            snap_monthly_table = f'{snap_monthly_db}.{snap_monthly_tb}' 
+            empty_snap_monthly_df = spark_core.spark_session.table(snap_monthly_table)
+            empty_snap_monthly_df.show(truncate=False)
+            
+            data_date_col = 'data_date'
+            status_column = 'is_active'
+            account_key   = 'account_key'
+            product_key   = 'product_key'
+            branch_key    = 'branch_key'
+            key_columns   = [account_key, product_key, branch_key]
+
+            month_key_table_config = TableConfig(config_path, env, 'ka_month_key')
+            month_key_table_property = TableProperty(db_name=month_key_table_config.db_name,
+                                                     tb_name=month_key_table_config.tb_name,
+                                                     table_path=month_key_table_config.table_path,
+                                                     fields=month_key_table_config.fields,
+                                                     partitions=month_key_table_config.partitions)
+            month_key_db = f'{month_key_table_property.database}'
+            month_key_tb = f'{month_key_table_property.table}'
+            month_key_df = spark_core.spark_session.table(f'{month_key_db}.{month_key_tb}')
+            
+            
+            current_process_date = process_date
+            current_today_date = datetime.now().strftime('%Y-%m-%d')
+            DataFrameHelper().update_insert_status_snap_monthly_to_table(transaction_df=intermediate_transaction_df,
+                                                                         status_column=status_column,
+                                                                         key_columns=key_columns,
+                                                                         process_date=current_process_date,
+                                                                         today_date=current_today_date,
+                                                                         month_key_df=month_key_df,
+                                                                         data_date_col_name=data_date_col,
+                                                                         spark_session=spark_core.spark_session,
+                                                                         snap_month_table=snap_monthly_table)
+            
+            snap_monthly_final = spark_core.spark_session.table(snap_monthly_table)
+            snap_monthly_final.show(truncate=False)
         else:
             raise TypeError(f"input environment is not right: {args['env']}")
     except Exception as e:

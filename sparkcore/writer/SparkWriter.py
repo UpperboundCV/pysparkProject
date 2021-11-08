@@ -27,22 +27,22 @@ class SparkWriter:
             if exist_result == '':
                 os.system(f"hdfs dfs -mkdir {hdfs_path}")
         except Exception as e:
-            print(f"cannot create path for table: Unexpected {e=}, {type(e)=}")
+            print(f"cannot create path for table: Unexpected {e}, {type(e)}")
             raise
 
     def create_table(self, table_property: TableProperty) -> None:
         # check if table exist if exist, then don't create, otherwise create it
-        if not (self.does_database_exist(table_property.database)):
-            self.spark_session.sql(f"create database if not exists {table_property.database}")
-        if not (self.does_table_exist(table_property.database, table_property.table)):
+        #if not (self.does_database_exist(table_property.database)):
+        #    self.spark_session.sql(f"create database if not exists {table_property.database}")
+        #if not (self.does_table_exist(table_property.database, table_property.table)):
             # create hdfs path for table
-            try:
-                self.create_hdfs_path(table_property.table_path)
-                sql_statement = table_property.create_table_sql(table_property.ORC_FORMAT)
-                print(sql_statement)
-                self.spark_session.sql(sql_statement)
-            except Exception as e:
-                print(f"cannot create table: Unexpected {e=}, {type(e)=}")
-                raise
-        else:
-            pass
+        try:
+            self.create_hdfs_path(table_property.table_path)
+            sql_statement = table_property.create_table_sql(table_property.ORC_FORMAT)
+            print(sql_statement)
+            self.spark_session.sql(sql_statement)
+        except Exception as e:
+            print(f"cannot create table: Unexpected {e}, {type(e)}")
+            raise
+        #else:
+        #    pass
