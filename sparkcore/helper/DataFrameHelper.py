@@ -1,9 +1,9 @@
 from typing import List
 
 import pyspark
-from pyspark.sql.functions import col, lit, max, when, md5, concat, lower, to_date
+from pyspark.sql.functions import col, lit, max, when, md5, concat, lower, to_date, upper
 from pyspark.sql.functions import months_between, coalesce, last_day
-from pyspark.sql.types import IntegerType, StringType
+from pyspark.sql.types import IntegerType, StringType, DateType
 
 from .DateHelper import DateHelper
 
@@ -26,6 +26,11 @@ class DataFrameHelper:
                           data_date_col_name: str) -> pyspark.sql.dataframe.DataFrame:
         yyyy_mm_dd_col = (col(data_date_col_name).cast(IntegerType()) + lit(20000000) - lit(430000)).cast(StringType())
         return transaction_df.withColumn(data_date_col_name, to_date(yyyy_mm_dd_col, "yyyyMMdd").cast(StringType()))
+
+    def to_entity_dwh(cls, transaction_df: pyspark.sql.dataframe.DataFrame) -> pyspark.sql.dataframe.DataFrame:
+        return transaction_df.withColumn(cls.ENTITY_CODE, when(col(cls.ENTITY_CODE) == "AYCAL", lit("AY"))
+                                         .when(col(cls.ENTITY_CODE) == "BAY", lit("KA"))
+                                         .otherwise(None))
 
     def with_entity(cls, transaction_df: pyspark.sql.dataframe.DataFrame) -> pyspark.sql.dataframe.DataFrame:
         return transaction_df.withColumn("entity",
@@ -58,13 +63,13 @@ class DataFrameHelper:
         return transaction_df \
             .withColumn("branch_key",
                         when(col(cls.BRANCH_CODE).isNotNull() & col("gecid").isNotNull(),
-                             md5(concat(lower(col("entity")), lower(col(cls.BRANCH_CODE))))))
+                             upper(md5(concat(lower(col("entity")), lower(col(cls.BRANCH_CODE)))))))
 
     def with_account_key(cls, transaction_df: pyspark.sql.dataframe.DataFrame) -> pyspark.sql.dataframe.DataFrame:
         product_company_code = concat(lower(col("product_code")), lower(col("company_code")))
         branch_product_company_code = concat(lower(col("branch_code")), product_company_code)
         account_branch_product_company_code = concat(lower(col(cls.ACCOUNT_CODE)), branch_product_company_code)
-        return transaction_df.withColumn("account_key", md5(account_branch_product_company_code))
+        return transaction_df.withColumn("account_key", upper(md5(account_branch_product_company_code)))
 
     def with_all_keys(cls, transaction_df: pyspark.sql.dataframe.DataFrame,
                       look_up_product_df: pyspark.sql.dataframe.DataFrame) -> pyspark.sql.dataframe.DataFrame:
@@ -90,7 +95,7 @@ class DataFrameHelper:
         # it needs to be saved outside function
         if snap_monthly_df.where(col(cls.MONTH_KEY) == 0).count() == 0:
             writed_df = transaction_df.where(col(data_date_col_name) == process_date) \
-                .withColumn(cls.UPDATE_DATE, lit(today_date)) \
+                .withColumn(cls.UPDATE_DATE, lit(today_date).cast(DateType())) \
                 .withColumn(cls.MONTH_KEY, lit(0).cast(IntegerType())) \
                 .withColumn(status_column, lit(cls.ACTIVE)) \
                 .selectExpr(snap_monthly_df_cols)
@@ -98,7 +103,7 @@ class DataFrameHelper:
             writed_df.write.format("orc").insertInto(snap_month_table, overwrite=True)
         else:
             current_snap_month = \
-                snap_monthly_df.where(col(cls.MONTH_KEY) == 0).select(max(col(data_date_col_name))).first()[0]
+                snap_monthly_df.where(col(cls.MONTH_KEY) == 0).select(max(col(data_date_col_name).cast(StringType()))).first()[0]
             print(f"process_date:{process_date}")
             print(f"current_snap_month:{current_snap_month}")
             print(f"diff month:{DateHelper().date_str_num_month_diff(process_date, current_snap_month)}")
@@ -112,7 +117,7 @@ class DataFrameHelper:
                 # process_date is in monthkey = 0
                 transaction_df \
                     .where(col(data_date_col_name) == process_date) \
-                    .withColumn(cls.UPDATE_DATE, lit(today_date)) \
+                    .withColumn(cls.UPDATE_DATE, lit(today_date).cast(DateType())) \
                     .withColumn(cls.MONTH_KEY, lit(0)) \
                     .withColumn(status_column, lit(cls.ACTIVE)) \
                     .selectExpr(snap_monthly_df_cols) \
@@ -136,7 +141,8 @@ class DataFrameHelper:
                                                snap_monthly_df=target_snap_month_key_df, status_column=status_column,
                                                key_columns=key_columns, data_date_col_name=data_date_col_name,
                                                additional_cols=[cls.UPDATE_DATE, data_date_col_name, status_column])
-                updated_df.selectExpr(snap_monthly_df_cols) \
+                updated_df.selectExpr(snap_monthly_df_cols)\
+                    .withColumn(cls.UPDATE_DATE, col(cls.UPDATE_DATE).cast(DateType())) \
                     .write.insertInto(snap_month_table, overwrite=True)
                 print("end: month key = 0")
 
@@ -248,12 +254,3 @@ class DataFrameHelper:
             .drop(cls.CURRENT_STATUS) \
             .selectExpr(*select_expr_lst)
         return result
-
-    def update_insert2(cls, transaction_df: pyspark.sql.dataframe.DataFrame,
-                       snap_monthly_df: pyspark.sql.dataframe.DataFrame,
-                       status_column: str,
-                       key_columns: List[str],
-                       data_date_col_name: str) -> pyspark.sql.dataframe.DataFrame:
-        # todo: use left and left anti join instead of outer join to avoid null in column and
-        # todo: duplicated column after outer join
-        return transaction_df
