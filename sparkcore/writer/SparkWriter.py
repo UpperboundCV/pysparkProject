@@ -12,7 +12,7 @@ class SparkWriter:
 
     def does_database_exist(self, database: str):
         db_lst = self.spark_session.sql('show databases').collect()
-        return database in [db.namespace for db in db_lst]
+        return database in [db.databaseName for db in db_lst]
 
     def does_table_exist(self, database: str, checked_table: str) -> bool:
         # this will assume that database already exists

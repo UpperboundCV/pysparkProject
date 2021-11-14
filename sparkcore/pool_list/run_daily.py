@@ -124,23 +124,24 @@ if __name__ == '__main__':
             transaction_pool_list_table_config = TableConfig(config_path, env, f'{entity}_pool_list_persist')
             transaction_pool_list_table = f'{transaction_pool_list_table_config.db_name}.{transaction_pool_list_table_config.tb_name}'
             transaction_pool_list_df = spark_core.spark_session.table(transaction_pool_list_table)
+            #transaction_pool_list_df.show(truncate=False)
             # Get product key look up DF
             product_key_config = TableConfig(config_path, env, f'{entity}_product_key')
             product_key_table = f'{product_key_config.db_name}.{product_key_config.tb_name}'
-            product_key_df = spark_core.spark_session(product_key_table)
+            product_key_df = spark_core.spark_session.table(product_key_table)
             # Get month key look up DF
             month_key_table_config = TableConfig(config_path, env, f'{entity}_month_key')
             month_key_table = f'{month_key_table_config.db_name}.{month_key_table_config.tb_name}'
-            month_key_df = spark_core.spark_session(month_key_table)
+            month_key_df = spark_core.spark_session.table(month_key_table)
             # Get snap monthly table name
             snap_monthly_table_config = TableConfig(config_path, env, f'{entity}_pool_list_curate')
             snap_monthly_table = f'{snap_monthly_table_config.db_name}.{snap_monthly_table_config.tb_name}'
             # Create snap monthly table if it doesn't exist
             snap_monthly_table_property = TableProperty(db_name=snap_monthly_table_config.db_name,
-                                                        tb_name=snap_monthly_table_config.tb_name,
-                                                        table_path=snap_monthly_table_config.table_path,
-                                                        fields=snap_monthly_table_config.fields,
-                                                        partitions=snap_monthly_table_config.partitions)
+                                                       tb_name=snap_monthly_table_config.tb_name,
+                                                       table_path=snap_monthly_table_config.table_path,
+                                                       fields=snap_monthly_table_config.fields,
+                                                       partitions=snap_monthly_table_config.partitions)
             print(snap_monthly_table_property.database)
             print(snap_monthly_table_property.table)
             print(snap_monthly_table_property.table_path)
@@ -152,7 +153,7 @@ if __name__ == '__main__':
             process_pool_list_from_pst_to_crt(process_date=process_date, today_date=today_date,
                                               raw_transaction_df=transaction_pool_list_df,
                                               product_key_df=product_key_df,
-                                              month_key_df=product_key_df,
+                                              month_key_df=month_key_df,
                                               spark_session=spark_core.spark_session,
                                               snap_monthly_table=snap_monthly_table)
         else:
