@@ -1,5 +1,6 @@
 from .ConfigProvider import ConfigProvider
-from typing import List, Optional
+from typing import List, Optional, Dict
+
 try:
     from ColumnDescriptor import ColumnDescriptor
 except:
@@ -19,7 +20,7 @@ class TableConfig(ConfigProvider):
         self.db_name = self.config[table_name].get(self.DB)
         self.tb_name = self.config[table_name].get(self.TB)
         self.table_path = self.config.get(table_name, self.TB_PATH, fallback=None)
-        self.fields = self.to_column_description(self.config.get(table_name, self.FIELDS, fallback=None)),
+        self.fields = self.to_column_description(self.config.get(table_name, self.FIELDS, fallback=None))
         self.partitions = self.to_column_description(self.config.get(table_name, self.PARTITIONS, fallback=None))
         self.check_point_path = self.config.get(table_name, self.CHECK_POINT_PATH, fallback=None)
 
@@ -44,3 +45,7 @@ class TableConfig(ConfigProvider):
             # print(type(lst_cols))
             # print("****************************")
             return lst_cols
+
+    def column_to_data_type(self) -> Dict[str, str]:
+        column_desc_lst = self.fields + self.partitions
+        return {column_desc.name: column_desc.data_type for column_desc in column_desc_lst}

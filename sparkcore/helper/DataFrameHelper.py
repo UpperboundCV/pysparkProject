@@ -1,9 +1,9 @@
-from typing import List
+from typing import List, Optional
 
 import pyspark
-from pyspark.sql.functions import col, lit, max, when, md5, concat, lower, to_date, upper
-from pyspark.sql.functions import months_between, coalesce, last_day
-from pyspark.sql.types import IntegerType, StringType, DateType
+from pyspark.sql.functions import col, lit, max, when, md5, concat, lower, to_date, upper, to_timestamp, unix_timestamp
+from pyspark.sql.functions import months_between, coalesce, last_day, date_format, substring
+from pyspark.sql.types import IntegerType, StringType, DateType, TimestampType
 
 from .DateHelper import DateHelper
 
@@ -22,10 +22,51 @@ class DataFrameHelper:
     ACCOUNT_CODE = 'account_code'
     ENTITY_CODE = 'entity_code'
 
+    def config_type_to_df_type(cls, config_data_type: str) -> Optional[str]:
+        if config_data_type == 'integer':
+            return "int"
+        elif config_data_type == 'string':
+            return "string"
+        elif config_data_type == 'date':
+            return "date"
+        elif config_data_type == 'timestamp':
+            return "timestamp"
+        else:
+            raise TypeError("data type does not exist.")
+
+    def convert_as400_data_date_to_yyyyMMdd(cls, data_date_col_name: str) -> pyspark.sql.functions.col:
+        return (col(data_date_col_name).cast(IntegerType()) + lit(20000000) - lit(430000)).cast(StringType())
+
+    def convert_yyyyMMdd_col_to_spark_date(cls, yyyyMMdd_col: pyspark.sql.functions.col) -> pyspark.sql.functions.col:
+        extracted_year = concat(substring(yyyyMMdd_col,1,4),lit('-'))
+        extracted_year_month = concat(extracted_year,concat(substring(yyyyMMdd_col,5,2),lit('-')))
+        extracted_year_month_day = concat(extracted_year_month, concat(substring(yyyyMMdd_col,7,2)))
+        return concat(to_date(extracted_year_month_day, "yyyy-MM-dd").cast(StringType()),lit(' 00:00:00'))
+
+    def convert_as400_data_date_to_timestamp(cls, df: pyspark.sql.dataframe.DataFrame, data_date_cols: List[str]) -> pyspark.sql.dataframe.DataFrame:
+        def convert_all_in_group(df_concat: pyspark.sql.dataframe.DataFrame, col_index: int) -> pyspark.sql.dataframe.DataFrame:
+            if len(data_date_cols) == 0:
+                return df_concat
+            else:
+                if col_index < len(data_date_cols):
+                    yyyyMMdd_str_col = cls.convert_as400_data_date_to_yyyyMMdd(data_date_cols[col_index])
+                    date_timestamp = cls.convert_yyyyMMdd_col_to_spark_date(yyyyMMdd_col=yyyyMMdd_str_col)
+                    df_attach_col = df_concat.withColumn(data_date_cols[col_index], to_timestamp(date_timestamp,'yyyy-MM-dd HH:mm:ss'))
+                    return convert_all_in_group(df_attach_col, col_index+1)
+                else:
+                    return df_concat
+        return convert_all_in_group(df, 0)
+
     def data_date_convert(cls, transaction_df: pyspark.sql.dataframe.DataFrame,
                           data_date_col_name: str) -> pyspark.sql.dataframe.DataFrame:
         yyyy_mm_dd_col = (col(data_date_col_name).cast(IntegerType()) + lit(20000000) - lit(430000)).cast(StringType())
         return transaction_df.withColumn(data_date_col_name, to_date(yyyy_mm_dd_col, "yyyyMMdd").cast(StringType()))
+
+    def with_entity_code(cls, transaction_df: pyspark.sql.dataframe.DataFrame, entity: str)-> pyspark.sql.dataframe.DataFrame:
+        if entity == 'ay':
+            return transaction_df.withColumn(cls.ENTITY_CODE, lit('AYCAL'))
+        else:
+            return transaction_df.withColumn(cls.ENTITY_CODE, lit('BAY'))
 
     def to_entity_dwh(cls, transaction_df: pyspark.sql.dataframe.DataFrame) -> pyspark.sql.dataframe.DataFrame:
         return transaction_df.withColumn(cls.ENTITY_CODE, when(col(cls.ENTITY_CODE) == "AYCAL", lit("AY"))
@@ -43,6 +84,9 @@ class DataFrameHelper:
                                          when(col(cls.ENTITY_CODE) == "AYCAL", lit("60000000"))
                                          .when(col(cls.ENTITY_CODE) == "BAY", lit("52800000"))
                                          .otherwise(None))
+
+    def with_company(cls, transaction_df: pyspark.sql.dataframe.DataFrame)-> pyspark.sql.dataframe.DataFrame:
+        return transaction_df.withColumn("company_code",lit('GECAL'))
 
     def with_account(cls, transaction_df: pyspark.sql.dataframe.DataFrame) -> pyspark.sql.dataframe.DataFrame:
         return transaction_df.withColumn(cls.ACCOUNT_CODE,
