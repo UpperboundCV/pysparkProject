@@ -300,7 +300,7 @@ if __name__ == "__main__":
     cl_repo_cols = cl_repo_temp_config.column_to_data_type().keys()
     cl_repo_temp_df = intermediate_df.select(*cl_repo_cols)
 
-    cl_repo_temp_df.show(2,truncate=False)
+    cl_repo_temp_df.show(5,truncate=False)
     cl_repo_temp_df.groupby('data_date').agg(count("*").alias("total")).show(truncate=False)
     cl_repo_temp_df.printSchema()
 
