@@ -117,19 +117,14 @@ def to_car_price_df(sfwrpo00_df: pyspark.sql.dataframe.DataFrame,
                     cl_repo_table_config: TableConfig,
                     entity: str) -> pyspark.sql.dataframe.DataFrame:
     sfwrpo00_date_group = ['O2TRDT', 'O2BIDT', 'O2PBDT', 'O2ADTE', 'O2SDAT', 'O2HLDT', 'O2B7DT', 'O2CCDT']
-    data_date_col = 'data_date'
-    max_date_col = 'max_date'
+
     col_desc_lst = cl_repo_table_config.column_to_data_type()
     pretty_dict_print(col_desc_lst)
     expr_lst = sfwrpo00_cols_to_car_price_cols(sfwpo00_date_cols=sfwrpo00_date_group, car_price_col_desc=col_desc_lst)
     map_cols_df = sfwrpo00_df.selectExpr(*expr_lst)
-    max_data_date = map_cols_df.agg(max(col(data_date_col)).alias(max_date_col)).select(max_date_col).collect()[0][
-        max_date_col]
-    non_empty_data_date_df = map_cols_df.withColumn(data_date_col,
-                                                    when((col(data_date_col) == '0') | (col(data_date_col).isNull()),
-                                                         lit(max_data_date)).otherwise(col(data_date_col)))
+
     car_price_date_group = [column_mapping()[sfwrpo00_date_col] for sfwrpo00_date_col in sfwrpo00_date_group]
-    convert_date_col_group_df = DataFrameHelper().convert_as400_data_date_to_timestamp(non_empty_data_date_df,
+    convert_date_col_group_df = DataFrameHelper().convert_as400_data_date_to_timestamp(map_cols_df,
                                                                                        car_price_date_group)
     add_entity_code_df = DataFrameHelper().with_entity_code(convert_date_col_group_df, entity)
     add_gecid_df = DataFrameHelper().with_gecid(add_entity_code_df)
@@ -167,7 +162,7 @@ if __name__ == "__main__":
             sfwrpo00_config = TableConfig(config_path, env, f'{entity}_pst_cl_repo_temp')
             sfwrpo00_table = f'{sfwrpo00_config.db_name}.{sfwrpo00_config.tb_name}'
             # note that col('O2TRDT') can not have 0 or null.
-            sfwrpo00_df = spark_core.spark_session.table(sfwrpo00_table).where(col('start_date') == process_date)
+            sfwrpo00_df = spark_core.spark_session.table(sfwrpo00_table).where(col('start_date') == process_date).where(col('O2TRDT') != '0')
             # create cl_repo_temp
             cl_repo_temp_config = TableConfig(config_path, env, f'{entity}_crt_cl_repo_temp')
             cl_repo_temp_property = TableProperty(db_name=cl_repo_temp_config.db_name,

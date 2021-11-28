@@ -2,7 +2,7 @@ import os
 import sys
 from functools import reduce
 
-sys.path.append('/home/up_python/PycharmProjects/pysparkProject/sparkcore')
+sys.path.append('/home/hdoop/PycharmProjects/pysparkProject/sparkcore')
 
 from reader.SparkReader import SparkReader
 from SparkCore import SparkCore
@@ -63,7 +63,7 @@ def sfwrpo00_transaction_df(spark_session: pyspark.sql.SparkSession,
     pipeline_name = 'test ingestion in local'
     execution_id = '1'
     spark_reader = SparkReader(spark_session)
-    df = spark_reader.read_txt_file(txt_path=source_txt_path,
+    df = spark_reader.read_txt_file(txt_path=f'file:///{source_txt_path}',
                                     have_header=False,
                                     delimiter='~', is_infershema=True)
     col_names = df.columns
@@ -115,17 +115,17 @@ def get_look_up_product_keys_by_entity(entity: str, spark_session: pyspark.sql.S
 
 
 def get_process_lst_dates(entity: str) -> List[str]:
-    return ['2021-10-02', '2021-10-05'] if entity == 'ay' else ['2021-05-01', '2021-07-08']
+    return ['2021-10-01', '2021-10-05'] if entity == 'ay' else ['2021-05-01', '2021-07-08']
 
 
 def get_today_date_lst(entity: str) -> List[str]:
-    return ['2021-10-03', '2021-10-06'] if entity == 'ay' else ['2021-05-02', '2021-07-09']
+    return ['2021-10-02', '2021-10-06'] if entity == 'ay' else ['2021-05-02', '2021-07-09']
 
 
 def get_raw_ay_sfwrpo00(spark_session: pyspark.sql.SparkSession,
                         process_dates: List[str]) -> pyspark.sql.dataframe.DataFrame:
-    source_txt_path1 = '../pysparkProject/sparkcore/cl_repo_temp/data/ay_sfwrpo00_20211002_113737.txt'
-    source_txt_path2 = '../pysparkProject/sparkcore/cl_repo_temp/data/AY_SFWRPO00_20211005_171148.txt'
+    source_txt_path1 = '/home/hdoop/PycharmProjects/pysparkProject/sparkcore/cl_repo_temp/data/ay_sfwrpo00_20211001_113737.txt'
+    source_txt_path2 = '/home/hdoop/PycharmProjects/pysparkProject/sparkcore/cl_repo_temp/data/ay_sfwrpo00_20211005_171148.txt'
     source_txt_paths = [source_txt_path1, source_txt_path2]
     today_date_lst = get_today_date_lst('ay')
     dfs = [sfwrpo00_transaction_df(spark_session=spark_session, source_txt_path=source_txt_paths[i],
@@ -137,8 +137,8 @@ def get_raw_ay_sfwrpo00(spark_session: pyspark.sql.SparkSession,
 
 def get_raw_ka_sfwpo00(spark_session: pyspark.sql.SparkSession,
                        process_dates: List[str]) -> pyspark.sql.dataframe.DataFrame:
-    source_txt_path1 = '../pysparkProject/sparkcore/cl_repo_temp/data/KA_SFWRPO00_20210501_194921.txt'
-    source_txt_path2 = '../pysparkProject/sparkcore/cl_repo_temp/data/KA_SFWRPO00_20210708_164256.txt'
+    source_txt_path1 = '/home/hdoop/PycharmProjects/pysparkProject/sparkcore/cl_repo_temp/data/ka_sfwrpo00_20210501_194921.txt'
+    source_txt_path2 = '/home/hdoop/PycharmProjects/pysparkProject/sparkcore/cl_repo_temp/data/ka_sfwrpo00_20210708_164256.txt'
     source_txt_paths = [source_txt_path1, source_txt_path2]
     today_date_lst = get_today_date_lst('ka')
     dfs = [sfwrpo00_transaction_df(spark_session=spark_session, source_txt_path=source_txt_paths[i],
@@ -245,19 +245,14 @@ def to_car_price_df(sfwrpo00_df: pyspark.sql.dataframe.DataFrame,
                     cl_repo_table_config: TableConfig,
                     entity: str) -> pyspark.sql.dataframe.DataFrame:
     sfwrpo00_date_group = ['O2TRDT', 'O2BIDT', 'O2PBDT', 'O2ADTE', 'O2SDAT', 'O2HLDT', 'O2B7DT', 'O2CCDT']
-    data_date_col = 'data_date'
-    max_date_col = 'max_date'
+
     col_desc_lst = cl_repo_table_config.column_to_data_type()
     pretty_dict_print(col_desc_lst)
     expr_lst = sfwrpo00_cols_to_car_price_cols(sfwpo00_date_cols=sfwrpo00_date_group, car_price_col_desc=col_desc_lst)
     map_cols_df = sfwrpo00_df.selectExpr(*expr_lst)
-    max_data_date = map_cols_df.agg(max(col(data_date_col)).alias(max_date_col)).select(max_date_col).collect()[0][
-        max_date_col]
-    non_empty_data_date_df = map_cols_df.withColumn(data_date_col,
-                                                    when((col(data_date_col) == '0') | (col(data_date_col).isNull()),
-                                                         lit(max_data_date)).otherwise(col(data_date_col)))
+
     car_price_date_group = [column_mapping()[sfwrpo00_date_col] for sfwrpo00_date_col in sfwrpo00_date_group]
-    convert_date_col_group_df = DataFrameHelper().convert_as400_data_date_to_timestamp(non_empty_data_date_df,
+    convert_date_col_group_df = DataFrameHelper().convert_as400_data_date_to_timestamp(map_cols_df,
                                                                                        car_price_date_group)
     add_entity_code_df = DataFrameHelper().with_entity_code(convert_date_col_group_df, entity)
     add_gecid_df = DataFrameHelper().with_gecid(add_entity_code_df)
@@ -291,7 +286,7 @@ if __name__ == "__main__":
     process_dates = get_process_lst_dates(entity)
     today_date_lst = get_today_date_lst(entity)
     sfwrpo00_df = get_sfwpo00_by_entity(entity, spark_session=spark_core.spark_session, process_dates=process_dates,
-                                        today_dates=today_date_lst)
+                                        today_dates=today_date_lst).where(col('O2TRDT') != '0')
     sfwrpo00_df.groupby('start_date', 'O2TRDT').agg(count("*").alias("total")).show(truncate=False)
     look_up_product_key_df = get_look_up_product_keys_by_entity(entity, spark_core.spark_session)
     intermediate_df = to_car_price_df(sfwrpo00_df=sfwrpo00_df, look_up_product_df=look_up_product_key_df,
