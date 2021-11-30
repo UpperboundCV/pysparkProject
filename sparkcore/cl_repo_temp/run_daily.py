@@ -15,7 +15,7 @@ os.environ["SPARK_HOME"] = "/opt/cloudera/parcels/CDH/lib/spark/"
 os.environ["PYTHONPATH"] = "/opt/cloudera/parcels/CDH/lib/spark/python"
 os.environ["JAVA_HOME"] = "/usr/java/jdk1.8.0_232-cloudera/"
 sys.path.append("/opt/cloudera/parcels/CDH/lib/spark/python")
-sys.path.append('/nfs/msa/dapscripts/ka/pln/dev/tfm/pys/collection/irepo/sparkcore')
+sys.path.append('/nfs/msa/dapscripts/ka/pln/dev/tfm/pys/collection/car_price/sparkcore')
 sys.path.append("/opt/cloudera/parcels/CDH/lib/spark/python/lib/py4j-0.10.7-src.zip")
 
 from reader.SparkReader import SparkReader
@@ -59,8 +59,8 @@ def sfwrpo00_schema() -> List[str]:
         "O2SCDS",
         "O2CCDT",
         "O2EPFL",
-        "O2RFG2",
-        "O2BDPR",
+        "OCRFG2",
+        "OCBDPR",
     ]
 
 
@@ -68,7 +68,7 @@ def column_mapping() -> Dict[str, str]:
     return {
         "O2PDTH": "product_code",
         "O2BRNO": "branch_code",
-        "O2CTNO": "contract_code",
+        "O2CTNO": "contract_number",
         "O2TRDT": "data_date",
         "O2BILL": "bill_code",
         "O2BIDT": "bill_code_date",
@@ -89,8 +89,8 @@ def column_mapping() -> Dict[str, str]:
         "O2SCDS": "s_code_desc",
         "O2CCDT": "cut_cost_date",
         "O2EPFL": "expand_flag",
-        "O2RFG2": "car_grade",
-        "O2BDPR": "bid_price",
+        "OCRFG2": "car_grade",
+        "OCBDPR": "bid_price",
     }
 
 
@@ -130,7 +130,7 @@ def to_car_price_df(sfwrpo00_df: pyspark.sql.dataframe.DataFrame,
     add_gecid_df = DataFrameHelper().with_gecid(add_entity_code_df)
     add_company_df = DataFrameHelper().with_company(add_gecid_df)
     add_entity_df = DataFrameHelper().with_entity(add_company_df)
-    add_account_code_df = DataFrameHelper().with_account(add_entity_df)
+    add_account_code_df = DataFrameHelper().with_account(add_entity_df, "contract_number")
     add_join_keys_df = DataFrameHelper().with_all_keys(transaction_df=add_account_code_df,
                                                        look_up_product_df=look_up_product_df)
     final_df = add_join_keys_df.drop(DataFrameHelper().ENTITY_CODE) \

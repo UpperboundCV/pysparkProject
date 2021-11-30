@@ -88,9 +88,9 @@ class DataFrameHelper:
     def with_company(cls, transaction_df: pyspark.sql.dataframe.DataFrame)-> pyspark.sql.dataframe.DataFrame:
         return transaction_df.withColumn("company_code",lit('GECAL'))
 
-    def with_account(cls, transaction_df: pyspark.sql.dataframe.DataFrame) -> pyspark.sql.dataframe.DataFrame:
+    def with_account(cls, transaction_df: pyspark.sql.dataframe.DataFrame, contract_code: str = 'contract_code') -> pyspark.sql.dataframe.DataFrame:
         return transaction_df.withColumn(cls.ACCOUNT_CODE,
-                                         when(col(cls.CONTRACT_CODE).isNotNull(), col(cls.CONTRACT_CODE)).otherwise(
+                                         when(col(contract_code).isNotNull(), col(contract_code)).otherwise(
                                              None))
 
     def with_product_key(cls, transaction_df: pyspark.sql.dataframe.DataFrame,

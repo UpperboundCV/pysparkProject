@@ -47,8 +47,8 @@ def sfwrpo00_schema() -> List[str]:
         "O2SCDS",
         "O2CCDT",
         "O2EPFL",
-        "O2RFG2",
-        "O2BDPR",
+        "OCRFG2",
+        "OCBDPR",
     ]
 
 
@@ -162,7 +162,7 @@ def column_mapping() -> Dict[str, str]:
     return {
         "O2PDTH": "product_code",
         "O2BRNO": "branch_code",
-        "O2CTNO": "contract_code",
+        "O2CTNO": "contract_number",
         "O2TRDT": "data_date",
         "O2BILL": "bill_code",
         "O2BIDT": "bill_code_date",
@@ -183,8 +183,8 @@ def column_mapping() -> Dict[str, str]:
         "O2SCDS": "s_code_desc",
         "O2CCDT": "cut_cost_date",
         "O2EPFL": "expand_flag",
-        "O2RFG2": "car_grade",
-        "O2BDPR": "bid_price",
+        "OCRFG2": "car_grade",
+        "OCBDPR": "bid_price",
     }
 
 
