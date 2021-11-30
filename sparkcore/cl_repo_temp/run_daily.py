@@ -162,7 +162,8 @@ if __name__ == "__main__":
             sfwrpo00_config = TableConfig(config_path, env, f'{entity}_pst_cl_repo_temp')
             sfwrpo00_table = f'{sfwrpo00_config.db_name}.{sfwrpo00_config.tb_name}'
             # note that col('O2TRDT') can not have 0 or null.
-            sfwrpo00_df = spark_core.spark_session.table(sfwrpo00_table).where(col('start_date') == process_date).where(col('O2TRDT') != '0')
+            sfwrpo00_df = spark_core.spark_session.table(sfwrpo00_table).where(col('start_date') == process_date).where(
+                col('O2TRDT') != '0')
             # create cl_repo_temp
             cl_repo_temp_config = TableConfig(config_path, env, f'{entity}_crt_cl_repo_temp')
             cl_repo_temp_property = TableProperty(db_name=cl_repo_temp_config.db_name,
