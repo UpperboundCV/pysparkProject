@@ -38,23 +38,27 @@ class DataFrameHelper:
         return (col(data_date_col_name).cast(IntegerType()) + lit(20000000) - lit(430000)).cast(StringType())
 
     def convert_yyyyMMdd_col_to_spark_date(cls, yyyyMMdd_col: pyspark.sql.functions.col) -> pyspark.sql.functions.col:
-        extracted_year = concat(substring(yyyyMMdd_col,1,4),lit('-'))
-        extracted_year_month = concat(extracted_year,concat(substring(yyyyMMdd_col,5,2),lit('-')))
-        extracted_year_month_day = concat(extracted_year_month, concat(substring(yyyyMMdd_col,7,2)))
-        return concat(to_date(extracted_year_month_day, "yyyy-MM-dd").cast(StringType()),lit(' 00:00:00'))
+        extracted_year = concat(substring(yyyyMMdd_col, 1, 4), lit('-'))
+        extracted_year_month = concat(extracted_year, concat(substring(yyyyMMdd_col, 5, 2), lit('-')))
+        extracted_year_month_day = concat(extracted_year_month, concat(substring(yyyyMMdd_col, 7, 2)))
+        return concat(to_date(extracted_year_month_day, "yyyy-MM-dd").cast(StringType()), lit(' 00:00:00'))
 
-    def convert_as400_data_date_to_timestamp(cls, df: pyspark.sql.dataframe.DataFrame, data_date_cols: List[str]) -> pyspark.sql.dataframe.DataFrame:
-        def convert_all_in_group(df_concat: pyspark.sql.dataframe.DataFrame, col_index: int) -> pyspark.sql.dataframe.DataFrame:
+    def convert_as400_data_date_to_timestamp(cls, df: pyspark.sql.dataframe.DataFrame,
+                                             data_date_cols: List[str]) -> pyspark.sql.dataframe.DataFrame:
+        def convert_all_in_group(df_concat: pyspark.sql.dataframe.DataFrame,
+                                 col_index: int) -> pyspark.sql.dataframe.DataFrame:
             if len(data_date_cols) == 0:
                 return df_concat
             else:
                 if col_index < len(data_date_cols):
                     yyyyMMdd_str_col = cls.convert_as400_data_date_to_yyyyMMdd(data_date_cols[col_index])
                     date_timestamp = cls.convert_yyyyMMdd_col_to_spark_date(yyyyMMdd_col=yyyyMMdd_str_col)
-                    df_attach_col = df_concat.withColumn(data_date_cols[col_index], to_timestamp(date_timestamp,'yyyy-MM-dd HH:mm:ss'))
-                    return convert_all_in_group(df_attach_col, col_index+1)
+                    df_attach_col = df_concat.withColumn(data_date_cols[col_index],
+                                                         to_timestamp(date_timestamp, 'yyyy-MM-dd HH:mm:ss'))
+                    return convert_all_in_group(df_attach_col, col_index + 1)
                 else:
                     return df_concat
+
         return convert_all_in_group(df, 0)
 
     def data_date_convert(cls, transaction_df: pyspark.sql.dataframe.DataFrame,
@@ -62,7 +66,8 @@ class DataFrameHelper:
         yyyy_mm_dd_col = (col(data_date_col_name).cast(IntegerType()) + lit(20000000) - lit(430000)).cast(StringType())
         return transaction_df.withColumn(data_date_col_name, to_date(yyyy_mm_dd_col, "yyyyMMdd").cast(StringType()))
 
-    def with_entity_code(cls, transaction_df: pyspark.sql.dataframe.DataFrame, entity: str)-> pyspark.sql.dataframe.DataFrame:
+    def with_entity_code(cls, transaction_df: pyspark.sql.dataframe.DataFrame,
+                         entity: str) -> pyspark.sql.dataframe.DataFrame:
         if entity == 'ay':
             return transaction_df.withColumn(cls.ENTITY_CODE, lit('AYCAL'))
         else:
@@ -85,10 +90,11 @@ class DataFrameHelper:
                                          .when(col(cls.ENTITY_CODE) == "BAY", lit("52800000"))
                                          .otherwise(None))
 
-    def with_company(cls, transaction_df: pyspark.sql.dataframe.DataFrame)-> pyspark.sql.dataframe.DataFrame:
-        return transaction_df.withColumn("company_code",lit('GECAL'))
+    def with_company(cls, transaction_df: pyspark.sql.dataframe.DataFrame) -> pyspark.sql.dataframe.DataFrame:
+        return transaction_df.withColumn("company_code", lit('GECAL'))
 
-    def with_account(cls, transaction_df: pyspark.sql.dataframe.DataFrame, contract_code: str = 'contract_code') -> pyspark.sql.dataframe.DataFrame:
+    def with_account(cls, transaction_df: pyspark.sql.dataframe.DataFrame,
+                     contract_code: str = 'contract_code') -> pyspark.sql.dataframe.DataFrame:
         return transaction_df.withColumn(cls.ACCOUNT_CODE,
                                          when(col(contract_code).isNotNull(), col(contract_code)).otherwise(
                                              None))
@@ -147,7 +153,8 @@ class DataFrameHelper:
             writed_df.write.format("orc").insertInto(snap_month_table, overwrite=True)
         else:
             current_snap_month = \
-                snap_monthly_df.where(col(cls.MONTH_KEY) == 0).select(max(col(data_date_col_name).cast(StringType()))).first()[0]
+                snap_monthly_df.where(col(cls.MONTH_KEY) == 0).select(
+                    max(col(data_date_col_name).cast(StringType()))).first()[0]
             print(f"process_date:{process_date}")
             print(f"current_snap_month:{current_snap_month}")
             print(f"diff month:{DateHelper().date_str_num_month_diff(process_date, current_snap_month)}")
@@ -185,7 +192,7 @@ class DataFrameHelper:
                                                snap_monthly_df=target_snap_month_key_df, status_column=status_column,
                                                key_columns=key_columns, data_date_col_name=data_date_col_name,
                                                additional_cols=[cls.UPDATE_DATE, data_date_col_name, status_column])
-                updated_df.selectExpr(snap_monthly_df_cols)\
+                updated_df.selectExpr(snap_monthly_df_cols) \
                     .withColumn(cls.UPDATE_DATE, col(cls.UPDATE_DATE).cast(DateType())) \
                     .write.insertInto(snap_month_table, overwrite=True)
                 print("end: month key = 0")

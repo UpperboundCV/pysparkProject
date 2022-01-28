@@ -70,6 +70,7 @@ def column_mapping() -> Dict[str, str]:
         "O2BRNO": "branch_code",
         "O2CTNO": "contract_number",
         "O2TRDT": "data_date",
+        "O2TRDT_ptn": "ptn_data_date",
         "O2BILL": "bill_code",
         "O2BIDT": "bill_code_date",
         "O2PBIL": "prev_bill_code",
@@ -116,28 +117,33 @@ def to_car_price_df(sfwrpo00_df: pyspark.sql.dataframe.DataFrame,
                     look_up_product_df: pyspark.sql.dataframe.DataFrame,
                     cl_repo_table_config: TableConfig,
                     entity: str) -> pyspark.sql.dataframe.DataFrame:
+    sfwrpo00_df_w_ptn = sfwrpo00_df.withColumn('O2TRDT_ptn', col('O2TRDT'))
     sfwrpo00_date_group = ['O2TRDT', 'O2BIDT', 'O2PBDT', 'O2ADTE', 'O2SDAT', 'O2HLDT', 'O2B7DT', 'O2CCDT']
 
     col_desc_lst = cl_repo_table_config.column_to_data_type()
     pretty_dict_print(col_desc_lst)
     expr_lst = sfwrpo00_cols_to_car_price_cols(sfwpo00_date_cols=sfwrpo00_date_group, car_price_col_desc=col_desc_lst)
-    map_cols_df = sfwrpo00_df.selectExpr(*expr_lst)
-
+    car_price_w_as400_date_df = sfwrpo00_df_w_ptn.selectExpr(*expr_lst)
+    car_price_w_as400_date_w_ptn_standard_df = car_price_w_as400_date_df \
+        .withColumn("ptn_data_date", DataFrameHelper().convert_as400_data_date_to_yyyyMMdd("ptn_data_date"))
     car_price_date_group = [column_mapping()[sfwrpo00_date_col] for sfwrpo00_date_col in sfwrpo00_date_group]
-    convert_date_col_group_df = DataFrameHelper().convert_as400_data_date_to_timestamp(map_cols_df,
-                                                                                       car_price_date_group)
-    add_entity_code_df = DataFrameHelper().with_entity_code(convert_date_col_group_df, entity)
-    add_gecid_df = DataFrameHelper().with_gecid(add_entity_code_df)
-    add_company_df = DataFrameHelper().with_company(add_gecid_df)
-    add_entity_df = DataFrameHelper().with_entity(add_company_df)
-    add_account_code_df = DataFrameHelper().with_account(add_entity_df, "contract_number")
-    add_join_keys_df = DataFrameHelper().with_all_keys(transaction_df=add_account_code_df,
-                                                       look_up_product_df=look_up_product_df)
-    final_df = add_join_keys_df.drop(DataFrameHelper().ENTITY_CODE) \
+    car_price_w_timestamp_df = DataFrameHelper().convert_as400_data_date_to_timestamp(
+        car_price_w_as400_date_w_ptn_standard_df,
+        car_price_date_group)
+
+    car_price_w_entity_code_df = DataFrameHelper().with_entity_code(car_price_w_timestamp_df, entity)
+    car_price_w_gecid_df = DataFrameHelper().with_gecid(car_price_w_entity_code_df)
+    car_price_w_company_df = DataFrameHelper().with_company(car_price_w_gecid_df)
+    car_price_w_entity_df = DataFrameHelper().with_entity(car_price_w_company_df)
+    car_price_w_account_code_df = DataFrameHelper().with_account(transaction_df=car_price_w_entity_df,
+                                                                 contract_code='contract_number')
+    car_price_w_join_keys_df = DataFrameHelper().with_all_keys(transaction_df=car_price_w_account_code_df,
+                                                               look_up_product_df=look_up_product_df)
+    car_price_df = car_price_w_join_keys_df.drop(DataFrameHelper().ENTITY_CODE) \
         .drop(DataFrameHelper().ACCOUNT_CODE) \
         .drop('company_code') \
         .drop('entity')
-    return final_df
+    return car_price_df
 
 
 if __name__ == "__main__":

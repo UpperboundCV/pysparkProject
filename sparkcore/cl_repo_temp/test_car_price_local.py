@@ -2,7 +2,7 @@ import os
 import sys
 from functools import reduce
 
-sys.path.append('/home/hdoop/PycharmProjects/pysparkProject/sparkcore')
+sys.path.append('/home/up_python/PycharmProjects/pysparkProject/sparkcore')
 
 from reader.SparkReader import SparkReader
 from SparkCore import SparkCore
@@ -124,8 +124,8 @@ def get_today_date_lst(entity: str) -> List[str]:
 
 def get_raw_ay_sfwrpo00(spark_session: pyspark.sql.SparkSession,
                         process_dates: List[str]) -> pyspark.sql.dataframe.DataFrame:
-    source_txt_path1 = '/home/hdoop/PycharmProjects/pysparkProject/sparkcore/cl_repo_temp/data/ay_sfwrpo00_20211001_113737.txt'
-    source_txt_path2 = '/home/hdoop/PycharmProjects/pysparkProject/sparkcore/cl_repo_temp/data/ay_sfwrpo00_20211005_171148.txt'
+    source_txt_path1 = '/home/up_python/PycharmProjects/pysparkProject/sparkcore/cl_repo_temp/data/ay_sfwrpo00_20211002_113737.txt'
+    source_txt_path2 = '/home/up_python/PycharmProjects/pysparkProject/sparkcore/cl_repo_temp/data/ay_sfwrpo00_20211005_171148.txt'
     source_txt_paths = [source_txt_path1, source_txt_path2]
     today_date_lst = get_today_date_lst('ay')
     dfs = [sfwrpo00_transaction_df(spark_session=spark_session, source_txt_path=source_txt_paths[i],
@@ -137,8 +137,8 @@ def get_raw_ay_sfwrpo00(spark_session: pyspark.sql.SparkSession,
 
 def get_raw_ka_sfwpo00(spark_session: pyspark.sql.SparkSession,
                        process_dates: List[str]) -> pyspark.sql.dataframe.DataFrame:
-    source_txt_path1 = '/home/hdoop/PycharmProjects/pysparkProject/sparkcore/cl_repo_temp/data/ka_sfwrpo00_20210501_194921.txt'
-    source_txt_path2 = '/home/hdoop/PycharmProjects/pysparkProject/sparkcore/cl_repo_temp/data/ka_sfwrpo00_20210708_164256.txt'
+    source_txt_path1 = '/home/up_python/PycharmProjects/pysparkProject/sparkcore/cl_repo_temp/data/ka_sfwrpo00_20210501_194921.txt'
+    source_txt_path2 = '/home/up_python/PycharmProjects/pysparkProject/sparkcore/cl_repo_temp/data/ka_sfwrpo00_20210708_164256.txt'
     source_txt_paths = [source_txt_path1, source_txt_path2]
     today_date_lst = get_today_date_lst('ka')
     dfs = [sfwrpo00_transaction_df(spark_session=spark_session, source_txt_path=source_txt_paths[i],
@@ -164,6 +164,7 @@ def column_mapping() -> Dict[str, str]:
         "O2BRNO": "branch_code",
         "O2CTNO": "contract_number",
         "O2TRDT": "data_date",
+        "O2TRDT_ptn": "ptn_data_date",
         "O2BILL": "bill_code",
         "O2BIDT": "bill_code_date",
         "O2PBIL": "prev_bill_code",
@@ -244,28 +245,33 @@ def to_car_price_df(sfwrpo00_df: pyspark.sql.dataframe.DataFrame,
                     look_up_product_df: pyspark.sql.dataframe.DataFrame,
                     cl_repo_table_config: TableConfig,
                     entity: str) -> pyspark.sql.dataframe.DataFrame:
+    sfwrpo00_df_w_ptn = sfwrpo00_df.withColumn('O2TRDT_ptn', col('O2TRDT'))
     sfwrpo00_date_group = ['O2TRDT', 'O2BIDT', 'O2PBDT', 'O2ADTE', 'O2SDAT', 'O2HLDT', 'O2B7DT', 'O2CCDT']
 
     col_desc_lst = cl_repo_table_config.column_to_data_type()
     pretty_dict_print(col_desc_lst)
     expr_lst = sfwrpo00_cols_to_car_price_cols(sfwpo00_date_cols=sfwrpo00_date_group, car_price_col_desc=col_desc_lst)
-    map_cols_df = sfwrpo00_df.selectExpr(*expr_lst)
-
+    car_price_w_as400_date_df = sfwrpo00_df_w_ptn.selectExpr(*expr_lst)
+    car_price_w_as400_date_w_ptn_standard_df = car_price_w_as400_date_df \
+        .withColumn("ptn_data_date", DataFrameHelper().convert_as400_data_date_to_yyyyMMdd("ptn_data_date"))
     car_price_date_group = [column_mapping()[sfwrpo00_date_col] for sfwrpo00_date_col in sfwrpo00_date_group]
-    convert_date_col_group_df = DataFrameHelper().convert_as400_data_date_to_timestamp(map_cols_df,
-                                                                                       car_price_date_group)
-    add_entity_code_df = DataFrameHelper().with_entity_code(convert_date_col_group_df, entity)
-    add_gecid_df = DataFrameHelper().with_gecid(add_entity_code_df)
-    add_company_df = DataFrameHelper().with_company(add_gecid_df)
-    add_entity_df = DataFrameHelper().with_entity(add_company_df)
-    add_account_code_df = DataFrameHelper().with_account(add_entity_df)
-    add_join_keys_df = DataFrameHelper().with_all_keys(transaction_df=add_account_code_df,
-                                                       look_up_product_df=look_up_product_df)
-    final_df = add_join_keys_df.drop(DataFrameHelper().ENTITY_CODE) \
+    car_price_w_timestamp_df = DataFrameHelper().convert_as400_data_date_to_timestamp(
+        car_price_w_as400_date_w_ptn_standard_df,
+        car_price_date_group)
+
+    car_price_w_entity_code_df = DataFrameHelper().with_entity_code(car_price_w_timestamp_df, entity)
+    car_price_w_gecid_df = DataFrameHelper().with_gecid(car_price_w_entity_code_df)
+    car_price_w_company_df = DataFrameHelper().with_company(car_price_w_gecid_df)
+    car_price_w_entity_df = DataFrameHelper().with_entity(car_price_w_company_df)
+    car_price_w_account_code_df = DataFrameHelper().with_account(transaction_df=car_price_w_entity_df,
+                                                                 contract_code='contract_number')
+    car_price_w_join_keys_df = DataFrameHelper().with_all_keys(transaction_df=car_price_w_account_code_df,
+                                                               look_up_product_df=look_up_product_df)
+    car_price_df = car_price_w_join_keys_df.drop(DataFrameHelper().ENTITY_CODE) \
         .drop(DataFrameHelper().ACCOUNT_CODE) \
         .drop('company_code') \
         .drop('entity')
-    return final_df
+    return car_price_df
 
 
 if __name__ == "__main__":
@@ -295,15 +301,14 @@ if __name__ == "__main__":
     cl_repo_cols = cl_repo_temp_config.column_to_data_type().keys()
     cl_repo_temp_df = intermediate_df.select(*cl_repo_cols)
 
-    cl_repo_temp_df.show(5,truncate=False)
-    cl_repo_temp_df.groupby('data_date').agg(count("*").alias("total")).show(truncate=False)
+    # cl_repo_temp_df.show(5, truncate=False)
+    cl_repo_temp_df.groupby('data_date', 'ptn_data_date').agg(count("*").alias("total")).show(truncate=False)
     cl_repo_temp_df.printSchema()
 
     cl_repo_temp_writer = SparkWriter(spark_core.spark_session)
     cl_repo_temp_writer.create_table(cl_repo_temp_property)
     cl_repo_temp_table = f'{cl_repo_temp_config.db_name}.{cl_repo_temp_config.tb_name}'
     cl_repo_temp_df.write.format("orc").insertInto(cl_repo_temp_table,overwrite=True)
-
+    #
     result_df = spark_core.spark_session.table(cl_repo_temp_table)
-    result_df.groupby('data_date').agg(count("*").alias("total")).show(truncate=False)
-
+    result_df.groupby('data_date', 'ptn_data_date').agg(count("*").alias("total")).show(truncate=False)
