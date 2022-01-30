@@ -6,7 +6,7 @@ from sparkcore.helper.DataFrameHelper import DataFrameHelper
 from sparkcore.helper.DateHelper import DateHelper
 import pyspark
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType, DoubleType
-from pyspark.sql.functions import col, lit
+from pyspark.sql.functions import col, lit, substring, regexp_replace
 from sys import platform
 from sparkcore.writer.TableProperty import TableProperty
 from sparkcore.ColumnDescriptor import ColumnDescriptor
@@ -891,7 +891,7 @@ def test_rerun_with_table(mock_transaction_pst_df_w_keys: pyspark.sql.dataframe.
         f'{snap_monthly_table_property.database}.{snap_monthly_table_property.table}')
     snap_monthly_cond2.show(truncate=False)
     # ==========end second insert into snap monthly ================================================================
-    # ==========start update snap monthly with 20211101 ================================================================
+    # # ==========start update snap monthly with 20211101 ================================================================
     mock_transaction_pst_df_w_key_20211101.write \
         .format("orc") \
         .mode("overwrite") \
@@ -935,8 +935,8 @@ def test_rerun_with_table(mock_transaction_pst_df_w_keys: pyspark.sql.dataframe.
     snap_monthly_cond3 = spark_session.table(
         f'{snap_monthly_table_property.database}.{snap_monthly_table_property.table}')
     snap_monthly_cond3.orderBy('month_key').show(truncate=False)
-    # ==========end second insert into snap monthly ================================================================
-    # ==========start update snap monthly with 20211102 ================================================================
+    # # ==========end second insert into snap monthly ================================================================
+    # # ==========start update snap monthly with 20211102 ================================================================
     mock_transaction_pst_df_w_key_20211102.write \
         .format("orc") \
         .mode("overwrite") \
