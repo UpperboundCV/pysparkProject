@@ -2,13 +2,14 @@ from typing import List, Optional
 
 import pyspark
 from pyspark.sql.functions import col, lit, max, when, md5, concat, lower, to_date, upper, to_timestamp, unix_timestamp
-from pyspark.sql.functions import months_between, coalesce, last_day, date_format, substring
+from pyspark.sql.functions import months_between, coalesce, last_day, date_format, substring, regexp_replace
 from pyspark.sql.types import IntegerType, StringType, DateType, TimestampType
 
 from .DateHelper import DateHelper
 
 
 class DataFrameHelper:
+    PTN_MONTH_KEY = 'ptn_month_key'
     MONTH_KEY = 'month_key'
     UPDATE_DATE = 'update_date'
     ACTIVE = 'active'
@@ -128,6 +129,9 @@ class DataFrameHelper:
         transaction_df_w_account_key = cls.with_account_key(transaction_df_w_branch_key)
         return transaction_df_w_account_key
 
+    def to_ptn_month_key(cls, yyyy_mm_dd_col_name: str) -> pyspark.sql.functions.col:
+        return substring(regexp_replace(yyyy_mm_dd_col_name, '-', ''), 0, 6)
+
     def update_insert_status_snap_monthly_to_table(cls, transaction_df: pyspark.sql.dataframe.DataFrame,
                                                    status_column: str,
                                                    key_columns: List[str],
@@ -147,6 +151,7 @@ class DataFrameHelper:
             writed_df = transaction_df.where(col(data_date_col_name) == process_date) \
                 .withColumn(cls.UPDATE_DATE, lit(today_date).cast(DateType())) \
                 .withColumn(cls.MONTH_KEY, lit(0).cast(IntegerType())) \
+                .withColumn(cls.PTN_MONTH_KEY, cls.to_ptn_month_key(data_date_col_name)) \
                 .withColumn(status_column, lit(cls.ACTIVE)) \
                 .selectExpr(snap_monthly_df_cols)
 
@@ -170,6 +175,7 @@ class DataFrameHelper:
                     .where(col(data_date_col_name) == process_date) \
                     .withColumn(cls.UPDATE_DATE, lit(today_date).cast(DateType())) \
                     .withColumn(cls.MONTH_KEY, lit(0)) \
+                    .withColumn(cls.PTN_MONTH_KEY, cls.to_ptn_month_key(data_date_col_name)) \
                     .withColumn(status_column, lit(cls.ACTIVE)) \
                     .selectExpr(snap_monthly_df_cols) \
                     .write.format("orc").insertInto(snap_month_table, overwrite=True)
@@ -178,15 +184,22 @@ class DataFrameHelper:
             else:
                 print("start: month key = 0")
                 target_month_key = cls.find_month_key_of_process_date(process_date, snap_monthly_df, data_date_col_name)
+
                 # rerun the whole monthkey
                 transaction_of_month_key = transaction_df.where(col(data_date_col_name) == process_date) \
                     .withColumn(cls.LAST_UPDATE_DATE, lit(today_date)) \
                     .withColumn(cls.MONTH_KEY, lit(target_month_key)) \
+                    .withColumn(cls.PTN_MONTH_KEY, cls.to_ptn_month_key(data_date_col_name)) \
                     .withColumn(cls.CURRENT_STATUS, lit(cls.ACTIVE)) \
                     .withColumnRenamed(data_date_col_name, cls.TRANSACTION_START_DATE)
                 if cls.MONTH_KEY not in key_columns:
                     key_columns.append(cls.MONTH_KEY)
-                target_snap_month_key_df = snap_monthly_df.where(col(cls.MONTH_KEY) == target_month_key).cache()
+                if cls.PTN_MONTH_KEY not in key_columns:
+                    key_columns.append(cls.PTN_MONTH_KEY)
+                target_snap_month_key_df = snap_monthly_df \
+                    .where((col(cls.MONTH_KEY) == target_month_key) &
+                           (col(cls.PTN_MONTH_KEY) == cls.to_ptn_month_key(data_date_col_name))) \
+                    .cache()
                 # target_month_key_df.show(truncate=False)
                 updated_df = cls.update_insert(transaction_df=transaction_of_month_key,
                                                snap_monthly_df=target_snap_month_key_df, status_column=status_column,
@@ -282,7 +295,8 @@ class DataFrameHelper:
             .where(col("year").cast(IntegerType()) == int(zero_month_key_last_date.year)) \
             .select(max(cls.MONTH_KEY)).first()[0]
         print(f"month key: {month_key}")
-        return snap_monthly_df.where(col(cls.MONTH_KEY) == 0).withColumn(cls.MONTH_KEY, lit(month_key))
+        return snap_monthly_df.where(col(cls.MONTH_KEY) == 0).withColumn(cls.MONTH_KEY, lit(month_key)) \
+            .withColumn(cls.PTN_MONTH_KEY, cls.to_ptn_month_key(data_date_col_name))
 
     def update_insert(cls, transaction_df: pyspark.sql.dataframe.DataFrame,
                       snap_monthly_df: pyspark.sql.dataframe.DataFrame, status_column: str, key_columns: List[str],
