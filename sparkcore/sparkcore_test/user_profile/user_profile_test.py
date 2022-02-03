@@ -120,6 +120,18 @@ def mock_entity_uam_result(spark_session: pyspark.sql.SparkSession) -> pyspark.s
     return df
 
 
+@pytest.fixture()
+def mock_user_type_result(spark_session: pyspark.sql.SparkSession) -> pyspark.sql.dataframe.DataFrame:
+    user_type = 'user_type'
+    user_type_total = 'user_type_total'
+    schema = StructType([StructField(user_type, StringType(), False),
+                         StructField(user_type_total, IntegerType(), False)])
+    data = [('STAFF', 9), ('CR', 9)]
+
+    df = spark_session.createDataFrame(data, schema)
+    return df
+
+
 def test_entity_uam(mock_ay_user_entity: pyspark.sql.dataframe.DataFrame,
                     mock_ka_user_entity: pyspark.sql.dataframe.DataFrame,
                     mock_entity_uam_result: pyspark.sql.dataframe.DataFrame) -> None:
@@ -151,3 +163,17 @@ def test_entity_uam(mock_ay_user_entity: pyspark.sql.dataframe.DataFrame,
     entity_uam_summary_df.show(n=100, truncate=False)
     assert are_dfs_schema_equal(entity_uam_summary_df, mock_entity_uam_result)
     assert are_dfs_data_equal(entity_uam_summary_df, mock_entity_uam_result)
+
+
+def test_user_type(mock_ay_user_entity: pyspark.sql.dataframe.DataFrame,
+                   mock_user_type_result: pyspark.sql.dataframe.DataFrame) -> None:
+    mock_ay_user_entity.show(truncate=False)
+    user_type_df = mock_ay_user_entity.withColumn('user_type', DataFrameHelper.add_user_type())
+    assert user_type_df.count() == 18
+    user_type_summary_df = user_type_df.groupBy('user_type').agg(
+        count('*').cast(IntegerType()).alias('user_type_total'))
+    user_type_summary_df.show(n=10, truncate=False)
+    user_type_summary_df.printSchema()
+    mock_user_type_result.printSchema()
+    assert are_dfs_schema_equal(user_type_summary_df, mock_user_type_result)
+    assert are_dfs_data_equal(user_type_summary_df, mock_user_type_result)

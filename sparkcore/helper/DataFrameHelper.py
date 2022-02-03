@@ -51,6 +51,12 @@ class DataFrameHelper:
             .otherwise(lit(None).cast(StringType()))
 
     @classmethod
+    def add_user_type(cls) -> pyspark.sql.functions.col:
+        return when(col('user_login').rlike("\D"), lit('CR')) \
+            .when(col('user_login').rlike("\d"), lit('STAFF')) \
+            .otherwise(lit('Undefined'))
+
+    @classmethod
     def config_type_to_df_type(cls, config_data_type: str) -> Optional[str]:
         if config_data_type == 'integer':
             return "int"
