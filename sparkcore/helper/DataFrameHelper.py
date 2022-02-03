@@ -182,6 +182,35 @@ class DataFrameHelper:
         return substring(regexp_replace(yyyy_mm_dd_col_name, '-', ''), 0, 6)
 
     @classmethod
+    def update_insert_snap_monthly_to_table(cls, transaction_df: pyspark.sql.dataframe.DataFrame,
+                                            process_date: str,  # value of data_date_col_name
+                                            today_date: str,
+                                            month_key_df: pyspark.sql.dataframe.DataFrame,
+                                            data_date_col_name: str,
+                                            spark_session: pyspark.sql.SparkSession,
+                                            snap_month_table: str) -> None:
+        snap_monthly_df = spark_session.table(snap_month_table)
+        snap_monthly_df_cols = [c for c in snap_monthly_df.columns]
+        print('inside')
+        print(','.join(snap_monthly_df_cols))
+        transaction_df.show(truncate=False)
+
+        if snap_monthly_df.where(col(cls.MONTH_KEY) == 0).count() == 0:
+            writed_df = transaction_df.where(DateHelper.timestamp2str(col(data_date_col_name)) == process_date) \
+                .withColumn(cls.UPDATE_DATE, DateHelper.data_date2timestamp(today_date)) \
+                .withColumn(cls.MONTH_KEY, lit(0).cast(IntegerType())) \
+                .withColumn(cls.PTN_MONTH_KEY, cls.to_ptn_month_key(data_date_col_name)) \
+                .selectExpr(snap_monthly_df_cols)
+            writed_df.write.format("orc").insertInto(snap_month_table, overwrite=True)
+        else:
+            current_snap_month = snap_monthly_df.where(col(cls.MONTH_KEY) == 0).select(
+                max(to_date(data_date_col_name)).cast(StringType())).first()[0]
+            print(f"process_date:{process_date}")
+            print(f"current_snap_month:{current_snap_month}")
+            print(f"diff month:{DateHelper().date_str_num_month_diff(process_date, current_snap_month)}")
+
+
+    @classmethod
     def update_insert_status_snap_monthly_to_table(cls, transaction_df: pyspark.sql.dataframe.DataFrame,
                                                    status_column: str,
                                                    key_columns: List[str],
@@ -195,8 +224,7 @@ class DataFrameHelper:
         snap_monthly_df_cols = [c for c in snap_monthly_df.columns]
         print("inside")
         transaction_df.show(truncate=False)
-        # cannot save the result here since the order of the columns after process is the same every time
-        # it needs to be saved outside function
+
         if snap_monthly_df.where(col(cls.MONTH_KEY) == 0).count() == 0:
             writed_df = transaction_df.where(col(data_date_col_name) == process_date) \
                 .withColumn(cls.UPDATE_DATE, lit(today_date).cast(DateType())) \

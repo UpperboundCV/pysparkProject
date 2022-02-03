@@ -192,7 +192,7 @@ def to_intermediate_user_profile_df(transaction_df: pyspark.sql.dataframe.DataFr
     intermediate_w_branch_key_df = DataFrameHelper.with_branch_key(intermediate_w_entity_df)
     # process date is in timestamp format YYYY-MM-DD HH:MM:SS
     intermediate_w_update_date_df = intermediate_w_branch_key_df.withColumn('update_date', lit(today_date))
-    intermediate_w_user_type_df = intermediate_w_update_date_df.withColmn('user_type')
+    intermediate_w_user_type_df = intermediate_w_update_date_df.withColumn('user_type', DataFrameHelper.add_user_type())
     return intermediate_w_update_date_df
 
 
@@ -269,7 +269,8 @@ def to_user_profile_uam_df(ay_transaction_df: pyspark.sql.dataframe.DataFrame,
     return intermediate_user_profile_uam_df
 
 
-def process_user_profile_from_pst_to_crt(entity: str, process_date: str, today_date: str,
+def process_user_profile_from_pst_to_crt(spark_session: pyspark.sql.SparkSession, entity: str, process_date: str,
+                                         today_date: str,
                                          ay_transaction_df: pyspark.sql.dataframe.DataFrame,
                                          ka_transaction_df: pyspark.sql.dataframe.DataFrame,
                                          ay_product_key_df: pyspark.sql.dataframe.DataFrame,
@@ -295,11 +296,24 @@ def process_user_profile_from_pst_to_crt(entity: str, process_date: str, today_d
     ))
     snap_monthly_writer = SparkWriter(spark_core.spark_session)
     snap_monthly_writer.create_table(snap_monthly_table_property)
+    data_date_col = 'data_date'
+    user_login = 'user_login'
     product_key = 'product_key'
     branch_key = 'branch_key'
-    key_columns = [product_key, branch_key]
+    key_columns = [user_login, product_key, branch_key]
 
     snap_monthly_table = f"{snap_monthly_table_property.database}.{snap_monthly_table_property.table}"
+    DataFrameHelper.update_insert_status_snap_monthly_to_table(transaction_df=intermediate_user_profile_df,
+                                                               status_column='status',
+                                                               key_columns=key_columns,
+                                                               process_date=process_date,
+                                                               today_date=today_date,
+                                                               month_key_df=month_key_df,
+                                                               data_date_col_name=data_date_col,
+                                                               spark_session=spark_session,
+                                                               snap_month_table=snap_monthly_table
+                                                               )
+
 
 if __name__ == '__main__':
     print('\n'.join(sys.path))
@@ -312,6 +326,7 @@ if __name__ == '__main__':
     today_date = datetime.today().strftime('%Y-%m-%d')
     entities = ['ka', 'ay']
     # test single case
+
     ay_transaction_df = user_profile_transaction_df(spark_session=spark_core.spark_session,
                                                     source_txt_path='../pysparkProject/sparkcore/user_profile/data/ay_user_profile_20211231_013020.txt',
                                                     process_date='2021-12-31',
@@ -323,9 +338,13 @@ if __name__ == '__main__':
     ay_transaction_df.show(truncate=False)
     ka_transaction_df.show(truncate=False)
 
-    process_user_profile_from_pst_to_crt(entity='ay', process_date='2021-12-31', today_date=today_date,
-                                         ay_transaction_df=ay_transaction_df, ka_transaction_df=ka_transaction_df,
-                                         ay_product_key_df=mock_ay_lookup_product_keys(spark_core.spark_session),
-                                         ka_product_key_df=mock_ka_lookup_product_keys(spark_core.spark_session),
-                                         month_key_df=mock_month_key_df(spark_core.spark_session),
-                                         environment=env)
+    # process_user_profile_from_pst_to_crt(spark_session=spark_core.spark_session, entity='ay', process_date='2021-12-31',
+    #                                      today_date=today_date,
+    #                                      ay_transaction_df=ay_transaction_df, ka_transaction_df=ka_transaction_df,
+    #                                      ay_product_key_df=mock_ay_lookup_product_keys(spark_core.spark_session),
+    #                                      ka_product_key_df=mock_ka_lookup_product_keys(spark_core.spark_session),
+    #                                      month_key_df=mock_month_key_df(spark_core.spark_session),
+    #                                      environment=env)
+    #
+    # snap_monthly_df = spark_core.spark_session.table('aydev_test.irepo_user_profile')
+    # snap_monthly_df.groupBy('month_key','ptn_month_key').agg(count('*').cast(IntegerType()).alias('total')).show(truncate=False)
