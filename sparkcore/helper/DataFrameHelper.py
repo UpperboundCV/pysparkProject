@@ -193,9 +193,9 @@ class DataFrameHelper:
         snap_monthly_df_cols = [c for c in snap_monthly_df.columns]
         print('inside')
         print(','.join(snap_monthly_df_cols))
-        transaction_df.show(truncate=False)
 
         if snap_monthly_df.where(col(cls.MONTH_KEY) == 0).count() == 0:
+            print('!fresh insert')
             writed_df = transaction_df.where(DateHelper.timestamp2str(col(data_date_col_name)) == process_date) \
                 .withColumn(cls.UPDATE_DATE, DateHelper.data_date2timestamp(today_date)) \
                 .withColumn(cls.MONTH_KEY, lit(0).cast(IntegerType())) \
@@ -209,6 +209,35 @@ class DataFrameHelper:
             print(f"current_snap_month:{current_snap_month}")
             print(f"diff month:{DateHelper().date_str_num_month_diff(process_date, current_snap_month)}")
 
+            if DateHelper.date_str_num_month_diff(process_date, current_snap_month) > 0:
+                # This condition will use when there is newer process_date than current_snap_month.
+                # 1. update from current monthkey = 0 to month key of process_date.
+                print("[1/2] start: update on month key")
+                updated_month_key_df = cls.update_month_key_zero(snap_monthly_df, month_key_df, data_date_col_name)
+                updated_month_key_df.selectExpr(snap_monthly_df_cols) \
+                    .write.format("orc").insertInto(snap_month_table, overwrite=True)
+                print("[1/2] end: update on month key")
+                # 2. save process_date in monthkey = 0
+                print("[2/2] start: save new transaction data to month key = 0")
+                writed_df = transaction_df.where(DateHelper.timestamp2str(col(data_date_col_name)) == process_date) \
+                    .withColumn(cls.UPDATE_DATE, DateHelper.data_date2timestamp(today_date)) \
+                    .withColumn(cls.MONTH_KEY, lit(0).cast(IntegerType())) \
+                    .withColumn(cls.PTN_MONTH_KEY, cls.to_ptn_month_key(data_date_col_name)) \
+                    .selectExpr(snap_monthly_df_cols)
+                writed_df.write.format("orc").insertInto(snap_month_table, overwrite=True)
+                print("[2/2] end: save new transaction data to month key = 0")
+            else:
+                # rerun case: please rerun for the beginning of the month
+                # elif DateHelper().date_str_num_month_diff(process_date, current_snap_month) < 0:
+                target_month_key = cls.find_month_key_of_process_date(process_date, snap_monthly_df, data_date_col_name)
+                print(f"[1/1] start: update on month key = {target_month_key}")
+                writed_df = transaction_df.where(DateHelper.timestamp2str(col(data_date_col_name)) == process_date) \
+                    .withColumn(cls.UPDATE_DATE, DateHelper.data_date2timestamp(today_date)) \
+                    .withColumn(cls.MONTH_KEY, lit(0).cast(IntegerType())) \
+                    .withColumn(cls.PTN_MONTH_KEY, cls.to_ptn_month_key(data_date_col_name)) \
+                    .selectExpr(snap_monthly_df_cols)
+                writed_df.write.format("orc").insertInto(snap_month_table, overwrite=True)
+                print(f"[1/1] end: update on month key = {target_month_key}")
 
     @classmethod
     def update_insert_status_snap_monthly_to_table(cls, transaction_df: pyspark.sql.dataframe.DataFrame,
@@ -252,21 +281,21 @@ class DataFrameHelper:
                 transaction_df \
                     .where(col(data_date_col_name) == process_date) \
                     .withColumn(cls.UPDATE_DATE, lit(today_date).cast(DateType())) \
-                    .withColumn(cls.MONTH_KEY, lit(0)) \
+                    .withColumn(cls.MONTH_KEY, lit(0).cast(IntegerType())) \
                     .withColumn(cls.PTN_MONTH_KEY, cls.to_ptn_month_key(data_date_col_name)) \
                     .withColumn(status_column, lit(cls.ACTIVE)) \
                     .selectExpr(snap_monthly_df_cols) \
                     .write.format("orc").insertInto(snap_month_table, overwrite=True)
                 print("start: update on month key")
-            # elif DateHelper().date_str_num_month_diff(process_date, current_snap_month) < 0:
             else:
-                print("start: month key = 0")
+                # rerun case
+                # elif DateHelper().date_str_num_month_diff(process_date, current_snap_month) < 0:
                 target_month_key = cls.find_month_key_of_process_date(process_date, snap_monthly_df, data_date_col_name)
-
+                print(f"start: month key = {target_month_key}")
                 # rerun the whole monthkey
                 transaction_of_month_key = transaction_df.where(col(data_date_col_name) == process_date) \
-                    .withColumn(cls.LAST_UPDATE_DATE, lit(today_date)) \
-                    .withColumn(cls.MONTH_KEY, lit(target_month_key)) \
+                    .withColumn(cls.LAST_UPDATE_DATE, lit(today_date).cast(DateType())) \
+                    .withColumn(cls.MONTH_KEY, lit(target_month_key).cast(IntegerType())) \
                     .withColumn(cls.PTN_MONTH_KEY, cls.to_ptn_month_key(data_date_col_name)) \
                     .withColumn(cls.CURRENT_STATUS, lit(cls.ACTIVE)) \
                     .withColumnRenamed(data_date_col_name, cls.TRANSACTION_START_DATE)
@@ -286,7 +315,7 @@ class DataFrameHelper:
                 updated_df.selectExpr(snap_monthly_df_cols) \
                     .withColumn(cls.UPDATE_DATE, col(cls.UPDATE_DATE).cast(DateType())) \
                     .write.insertInto(snap_month_table, overwrite=True)
-                print("end: month key = 0")
+                print(f"end: month key = {target_month_key}")
 
     @classmethod
     def update_insert_status_snap_monthly(cls, transaction_df: pyspark.sql.dataframe.DataFrame,

@@ -17,3 +17,5 @@ class SparkReader:
             .option("inferschema", "true" if is_infershema else "false") \
             .format("csv") \
             .load(txt_path)
+
+
