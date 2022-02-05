@@ -283,7 +283,7 @@ if __name__ == '__main__':
             spark_core = SparkCore(env, f"{entity}_user_profile_{process_date}")
             spark_core.spark_session.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
             spark_core.spark_session.sparkContext.setLogLevel("ERROR")
-            spark_core.spark_session.sparkContext.setCheckpointDir("/tmp/checkpoint")
+
             # Get transaction user profile Df
             # ay
             ay_trans_user_profile_conf = TableConfig(config_path, env, f"ay_user_profile_persist")
