@@ -2,7 +2,8 @@ from typing import List, Optional
 
 import pyspark
 from pyspark.sql.functions import col, lit, max, when, md5, concat, lower, to_date, upper, to_timestamp, unix_timestamp
-from pyspark.sql.functions import months_between, coalesce, last_day, date_format, substring, regexp_replace, lower
+from pyspark.sql.functions import months_between, coalesce, last_day, date_format, substring, regexp_replace, lower, \
+    broadcast
 from pyspark.sql.types import IntegerType, StringType, DateType, TimestampType
 
 from .DateHelper import DateHelper
@@ -145,6 +146,24 @@ class DataFrameHelper:
                                              None))
 
     @classmethod
+    def with_short_product_key(cls, transaction_df: pyspark.sql.dataframe.DataFrame) -> pyspark.sql.dataframe.DataFrame:
+        return transaction_df.withColumn('product_key', when(col('product_code') == 'MC', lit("1234abc"))
+                                                       .when(col("product_code") == 'HP', lit("567xyz")).otherwise(
+            lit(None)))
+
+    @classmethod
+    def with_broadcast_product_key(cls, transaction_df: pyspark.sql.dataframe.DataFrame,
+                                   look_up_product_df: pyspark.sql.dataframe.DataFrame) -> pyspark.sql.dataframe.DataFrame:
+        product_df = look_up_product_df.withColumnRenamed(cls.PRODUCT_KEY, "lookup_product_key") \
+            .withColumnRenamed("product_id", "lookup_product_id")
+        transaction_df_w_product_key = transaction_df.alias("t") \
+            .join(broadcast(product_df.alias("p")), on=[col("t.product_code") == col("p.lookup_product_id")],
+                  how="left") \
+            .withColumn(cls.PRODUCT_KEY, col("p.lookup_product_key")) \
+            .select("t.*", col(cls.PRODUCT_KEY))
+        return transaction_df_w_product_key
+
+    @classmethod
     def with_product_key(cls, transaction_df: pyspark.sql.dataframe.DataFrame,
                          look_up_product_df: pyspark.sql.dataframe.DataFrame) -> pyspark.sql.dataframe.DataFrame:
         product_df = look_up_product_df.withColumnRenamed(cls.PRODUCT_KEY, "lookup_product_key") \
@@ -200,8 +219,14 @@ class DataFrameHelper:
                 .withColumn(cls.UPDATE_DATE, DateHelper.data_date2timestamp(today_date)) \
                 .withColumn(cls.MONTH_KEY, lit(0).cast(IntegerType())) \
                 .withColumn(cls.PTN_MONTH_KEY, cls.to_ptn_month_key(data_date_col_name)) \
-                .selectExpr(snap_monthly_df_cols)
-            writed_df.write.format("orc").insertInto(snap_month_table, overwrite=True)
+                .selectExpr(snap_monthly_df_cols).cache()
+            writed_df.show(n=5, truncate=False)
+            print(writed_df.rdd.getNumPartitions())
+            writed_df.repartition(800).write.format("orc").insertInto(snap_month_table, overwrite=True)
+            # writed_df.repartition(500).write.partitionBy(cls.PTN_MONTH_KEY).format("orc").mode("overwrite").saveAsTable(
+            #     snap_month_table)
+            # writed_df.coalesce(5).write.partitionBy(cls.PTN_MONTH_KEY).format("orc").mode("overwrite").saveAsTable(
+            #     snap_month_table)
         else:
             current_snap_month = snap_monthly_df.where(col(cls.MONTH_KEY) == 0).select(
                 max(to_date(data_date_col_name)).cast(StringType())).first()[0]

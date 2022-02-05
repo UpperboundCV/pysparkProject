@@ -106,11 +106,11 @@ def get_entity_uam_df(ay_transaction_df: pyspark.sql.dataframe.DataFrame,
     # remove time from sent_date
     ext_ay_input_user_profile = ay_transaction_df.withColumn('sent_date',
                                                              date_trunc("day", col('sent_date')))
-    ext_ay_input_user_profile.show(truncate=False)
+    # ext_ay_input_user_profile.show(truncate=False)
 
     ext_ka_input_user_profile = ka_transaction_df.withColumn('sent_date',
                                                              date_trunc("day", col('sent_date')))
-    ext_ka_input_user_profile.show(truncate=False)
+    # ext_ka_input_user_profile.show(truncate=False)
     # combine entity ay and ka
     ay_user_entity_df = ext_ay_input_user_profile \
         .withColumnRenamed('user_status', 'ay_status') \
@@ -126,11 +126,11 @@ def get_entity_uam_df(ay_transaction_df: pyspark.sql.dataframe.DataFrame,
                                itertools.product(entity_status, entities)]
     print('\n'.join(uam_cal_list))
     entity_status_labeled_df = all_entities_df.selectExpr(*uam_cal_list)
-    entity_status_labeled_df.show(n=100, truncate=False)
+    # entity_status_labeled_df.show(n=100, truncate=False)
     # Get user_login entity_uam
     uam_df = entity_status_labeled_df.withColumn(entity_uam, DataFrameHelper.add_entity_uam()).select('user_login',
                                                                                                       'entity_uam')
-    uam_df.show(n=100, truncate=False)
+    # uam_df.show(n=100, truncate=False)
     return uam_df
 
 
@@ -209,9 +209,9 @@ def user_profile_transaction_df(spark_session: pyspark.sql.SparkSession,
         .withColumn('record_deleted_flag', lit(record_deleted_flag).cast(IntegerType())) \
         .withColumn('pipeline_name', lit(pipeline_name)) \
         .withColumn('execution_id', lit(execution_id).cast(IntegerType())) \
-        .withColumn('updated_date', to_timestamp(col('updated_date'), DateHelper.HIVE_TIMESTAMP_FORMAT) ) \
-        .withColumn('create_date',  to_timestamp(col('create_date'), DateHelper.HIVE_TIMESTAMP_FORMAT)) \
-        .withColumn('sent_date',    to_timestamp(col('sent_date'), DateHelper.HIVE_TIMESTAMP_FORMAT))
+        .withColumn('updated_date', to_timestamp(col('updated_date'), DateHelper.HIVE_TIMESTAMP_FORMAT)) \
+        .withColumn('create_date', to_timestamp(col('create_date'), DateHelper.HIVE_TIMESTAMP_FORMAT)) \
+        .withColumn('sent_date', to_timestamp(col('sent_date'), DateHelper.HIVE_TIMESTAMP_FORMAT))
 
 
 def get_user_profile_transaction_df(spark_session: pyspark.sql.SparkSession,
@@ -244,7 +244,7 @@ def process_user_profile_from_pst_to_crt(spark_session: pyspark.sql.SparkSession
     transaction_w_entity_uam_df = ay_transaction_df.join(uam_df, on=['user_login'],
                                                          how='inner') if entity == 'ay' else ka_transaction_df.join(
         uam_df, on=['user_login'], how='inner')
-    transaction_w_entity_uam_df.show(n=100, truncate=False)
+    # transaction_w_entity_uam_df.show(n=100, truncate=False)
     # add user_type
     transaction_w_user_type_df = transaction_w_entity_uam_df \
         .withColumn('user_type',
@@ -253,10 +253,24 @@ def process_user_profile_from_pst_to_crt(spark_session: pyspark.sql.SparkSession
         .withColumnRenamed('updated_date', 'web_updated_date') \
         .withColumnRenamed('create_date', 'web_create_date') \
         .withColumnRenamed('sent_date', 'data_date')
-    intermediate_w_product_key_df = DataFrameHelper.with_product_key(transaction_w_user_type_df, product_key_df)
+    print('rename column: user_status -> status')
+    print('rename column: updated_date -> web_updated_date')
+    print('rename column: create_date -> web_create_date')
+    print('rename column: sent_date -> data_date')
+    # transaction_w_user_type_df.show(n=7, truncate=False)
+    intermediate_w_product_key_df = DataFrameHelper.with_short_product_key(transaction_w_user_type_df).repartition(
+        col('product_key'))
+    # intermediate_w_product_key_df.show(n=8, truncate=False)
+    print('add product key')
     intermediate_w_gecid_df = DataFrameHelper.with_gecid(intermediate_w_product_key_df)
+    # intermediate_w_gecid_df.show(n=9, truncate=False)
+    print('add gecid')
     intermediate_w_entity_df = DataFrameHelper.with_entity(intermediate_w_gecid_df)
-    intermediate_w_branch_key_df = DataFrameHelper.with_branch_key(intermediate_w_entity_df)
+    # intermediate_w_entity_df.show(n=10, truncate=False)
+    print('add entity')
+    intermediate_w_branch_key_df = DataFrameHelper.with_branch_key(intermediate_w_entity_df).cache()
+    # intermediate_w_branch_key_df.show(n=11, truncate=False)
+    print('add branch key')
     DataFrameHelper.update_insert_snap_monthly_to_table(transaction_df=intermediate_w_branch_key_df,
                                                         process_date=process_date, today_date=today_date,
                                                         month_key_df=month_key_df,
@@ -281,7 +295,7 @@ if __name__ == '__main__':
             today_date = datetime.now().strftime('%Y-%m-%d')
             # instantiate spark session
             spark_core = SparkCore(env, f"{entity}_user_profile_{process_date}")
-            spark_core.spark_session.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
+
             spark_core.spark_session.sparkContext.setLogLevel("ERROR")
 
             # Get transaction user profile Df
@@ -308,7 +322,8 @@ if __name__ == '__main__':
                 ka_report = f'{ka_trans_user_profile_table}:{num_row_ka_input_df}'
                 raise TypeError(f"one of transaction input df's is empty => {ay_report}  | {ka_report} ")
 
-            ay_trans_user_profile_df.where(col('user_login')==' ').show(truncate=False)
+            ay_trans_user_profile_df.show(n=5, truncate=False)
+            ka_trans_user_profile_df.show(n=5, truncate=False)
 
             # Get product key look up DF
             product_key_df = (get_look_up_product_keys_by_entity(entity,
