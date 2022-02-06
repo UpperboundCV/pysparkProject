@@ -8,7 +8,7 @@ import re
 
 class TableCreator:
     db_source = ['afs', 'web']
-    db_datamart = ['collection']
+    db_datamart = ['collection','autodatamart']
 
     def __init__(self, schema: str, table_name: str) -> None:
         self.schema = schema
