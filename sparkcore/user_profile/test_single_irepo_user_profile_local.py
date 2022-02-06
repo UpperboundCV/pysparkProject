@@ -242,8 +242,8 @@ def process_user_profile_from_pst_to_crt(spark_session: pyspark.sql.SparkSession
     uam_df = get_entity_uam_df(ay_transaction_df, ka_transaction_df)
     # add entity_uam back to transaction_df
     transaction_w_entity_uam_df = ay_transaction_df.join(uam_df, on=['user_login'],
-                                                         how='inner') if entity == 'ay' else ka_transaction_df.join(
-        uam_df, on=['user_login'], how='inner')
+                                                         how='left') if entity == 'ay' else ka_transaction_df.join(
+        uam_df, on=['user_login'], how='left')
     # transaction_w_entity_uam_df.show(n=100, truncate=False)
     # add user_type
     transaction_w_user_type_df = transaction_w_entity_uam_df \
