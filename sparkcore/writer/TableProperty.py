@@ -1,4 +1,5 @@
-from typing import Any
+from typing import Any, List, Optional
+from sparkcore.ColumnDescriptor import ColumnDescriptor
 
 
 class TableProperty:
@@ -8,26 +9,32 @@ class TableProperty:
     def __init__(self, db_name: str,
                  tb_name: str,
                  table_path: str,
-                 fields: Any,
-                 partitions: Any = None) -> None:
+                 fields: List[ColumnDescriptor],
+                 partitions: Optional[List[ColumnDescriptor]] = None) -> None:
         self.database = db_name
         self.table = tb_name
         self.table_path = table_path
         self.partition_by = partitions
         self.column_descriptions = fields
 
-    def column_types_to_str(self, column_specs: Any) -> str:
+    def column_types_to_str(self, column_specs: List[ColumnDescriptor]) -> str:
         column_types_process = []
+        print(','.join([f"{column_spec.name} {column_spec.data_type} " for column_spec in
+                column_specs]))
         if type(column_specs) is list:
+            print('cond1')
             column_vectors = column_specs
             column_types_process = [
-                f"{column_spec.name} {column_spec.data_type} COMMENT {column_spec.comment}" for column_spec in
+                f"{column_spec.name} {column_spec.data_type} COMMENT '{column_spec.comment}'" for column_spec in
                 column_specs]
         else:
+            print('cond2')
             column_types_process = [
-                f"{column_spec.name} {column_spec.data_type} COMMENT {column_spec.comment}" for column_spec in
+                f"{column_spec.name} {column_spec.data_type} COMMENT '{column_spec.comment}'" for column_spec in
                 column_specs[0]]
-        return ',\n'.join(column_types_process)
+        output = ',\n'.join(column_types_process)
+        print(output)
+        return output
 
     def create_table_sql(self, table_format: str = ORC_FORMAT, delimitor: str = None) -> str:
         table_type = 'external'
