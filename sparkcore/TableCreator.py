@@ -16,7 +16,8 @@ class TableCreator:
     db_zone = ['pst', 'crt']
 
     def __init__(self, spark_session: SparkSession, schema: str, table_name: str, fields: List[ColumnDescriptor],
-                 partition_cols: List[ColumnDescriptor]) -> None:
+                 partition_cols: List[ColumnDescriptor], env: str) -> None:
+        self.env = env
         self.spark_session = spark_session
         self.schema = schema
         self.table_name = table_name
@@ -41,7 +42,8 @@ class TableCreator:
                 raise TypeError("source or destination schema is not valid")
 
         if validate_schema_name():
-            base = '/tmp'
+            print(f'environment: {self.env}')
+            base = '' if self.env != 'local' else '/tmp'
             source_or_destination = self.schema.split('_')[1]
             if 'ka' in self.schema:
                 base = base + '/data/ka'
@@ -100,4 +102,3 @@ class TableCreator:
         spark_writer = SparkWriter(self.spark_session)
         spark_writer.create_table(table_health_property)
         return spark_writer.does_table_exist(self.schema, self.table_name)
-

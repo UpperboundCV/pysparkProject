@@ -16,11 +16,14 @@ from functools import reduce
 
 class TableHealth:
 
-    def __init__(self, spark_session: pyspark.sql.SparkSession, source_schema: str, source_table_name: str):
+    def __init__(self, spark_session: pyspark.sql.SparkSession, source_schema: str, source_table_name: str,
+                 env: str = 'local') -> None:
         self.spark_session = spark_session
         self.schema = source_schema
         self.table_name = source_table_name
         self.source_partition = self.get_table_partition()
+        self.health_table_name = f'{self.table_name}_health' if self.source_partition is not None else None
+        self.env = env
 
     def get_table_partition(self) -> Optional[str]:
         # todo: please aware that table can have more than one partition
@@ -71,7 +74,8 @@ class TableHealth:
         table_creator = TableCreator(spark_session=self.spark_session, schema=self.schema,
                                      table_name=f'{self.table_name}_health',
                                      fields=self.health_table_columns(),
-                                     partition_cols=partition_cols)
+                                     partition_cols=partition_cols,
+                                     env=self.env)
         return table_creator.create()
 
     def aggregate_on_column(self, df: pyspark.sql.dataframe.DataFrame, at_col: str) -> pyspark.sql.dataframe.DataFrame:
@@ -94,18 +98,15 @@ class TableHealth:
             ratio = (len(d_vals) * 1.0) / df.count()
             type = 'category' if (ratio < 0.1) or (num_dup > 1) else 'string'
             if type == 'string':
-                return summary_df.withColumn('type', lit(type)).select('crunch_date', 'data_date', 'column', 'type',
-                                                                       'd_min', 'd_max', 'd_mean', 'd_median', 'd_sum',
-                                                                       'null_cnt', 'nan_cnt', 'empty_cnt',
-                                                                       'cnt_distinct')
+                return summary_df.withColumn('d_type', lit(type))
             else:
                 cnt_distinct_at_col = df.groupby(self.source_partition, at_col).count()
                 to_map = cnt_distinct_at_col.groupby(self.source_partition).agg(
                     map_from_entries(collect_list(struct(at_col, "count"))).alias("cnt_distinct"))
                 cnt_distinct_str = str(to_map.collect()[0]['cnt_distinct'])
-                return summary_df.withColumn('cnt_distinct', lit(cnt_distinct_str)).withColumn('type', lit(type))
+                return summary_df.withColumn('cnt_distinct', lit(cnt_distinct_str)).withColumn('d_type', lit(type))
         else:
-            return summary_df.withColumn('type', lit(type))
+            return summary_df.withColumn('d_type', lit(type))
 
     def summary_by_column(self) -> pyspark.sql.dataframe.DataFrame:
         if self.get_table_partition() is not None:
@@ -123,4 +124,28 @@ class TableHealth:
             today_date = DateHelper.today_date()
             summary_by_column_df = reduce(DataFrame.unionAll, summary_by_col_dfs).withColumn('crunch_date',
                                                                                              lit(today_date))
-            return summary_by_column_df
+            # summary_by_column_df.show(truncate=False)
+            return summary_by_column_df.select('column', 'd_type', 'd_min', 'd_max', 'd_mean', 'd_median', 'd_sum',
+                                               'null_cnt', 'nan_cnt', 'empty_cnt',
+                                               'cnt_distinct', 'crunch_date', 'data_date')
+
+    def save(self) -> None:
+        if self.source_partition is not None:
+            spark_writer = SparkWriter(spark_session=self.spark_session)
+            if not (spark_writer.does_table_exist(database=self.schema, checked_table=self.health_table_name)):
+                self.create_health_table()
+            health_table_df = self.spark_session.table(f'{self.schema}.{self.health_table_name}')
+            df_col_set = set(health_table_df.columns)
+            print(f'df_col_set: {df_col_set}')
+            process_df = self.summary_by_column()
+            process_df.show(truncate=False)
+            process_df_col_set = set(process_df.columns)
+            print(f'process_df_col_set: {process_df_col_set}')
+            if df_col_set == process_df_col_set:
+                process_df.select(*process_df.columns).write.format("orc").insertInto(
+                    f'{self.schema}.{self.health_table_name}',
+                    overwrite=True)
+            else:
+                raise TypeError(f"""health table columns: {df_col_set} is equal to 
+                                    process_df columns: {process_df_col_set}
+                                    """)
