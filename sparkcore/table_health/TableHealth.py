@@ -6,7 +6,7 @@ from sparkcore.helper.DateHelper import DateHelper
 from typing import List, Optional
 import itertools
 from pyspark.sql.functions import col, to_json, collect_list, create_map, min, mean, isnull, isnan, count, expr, lit, \
-    percentile_approx, StringType, map_from_entries, collect_list, struct, round
+    percentile_approx, StringType, map_from_entries, collect_list, struct, round, when
 from pyspark.sql.functions import max as spark_max, min as spark_min
 from pyspark.sql.functions import sum as spark_sum
 from pyspark.sql import DataFrame
@@ -76,16 +76,17 @@ class TableHealth:
 
     def aggregate_on_column(self, df: pyspark.sql.dataframe.DataFrame, at_col: str) -> pyspark.sql.dataframe.DataFrame:
         type = 'numeric'
+
         summary_df = df.groupby(self.source_partition).agg(
             spark_min(at_col).cast(StringType()).alias('d_min'),
             spark_max(at_col).cast(StringType()).alias('d_max'),
-            round(mean(col(at_col)),2).cast(StringType()).alias('d_mean'),
-            round(percentile_approx(at_col, 0.5),2).cast(StringType()).alias('d_median'),
+            round(mean(col(at_col)), 2).cast(StringType()).alias('d_mean'),
+            round(percentile_approx(at_col, 0.5), 2).cast(StringType()).alias('d_median'),
             spark_sum(col(at_col)).cast(StringType()).alias('d_sum'),
-            count(isnull(col(at_col))).cast(StringType()).alias('null_cnt'),
-            count(isnan(col(at_col))).cast(StringType()).alias('nan_cnt'),
-            count(col(at_col) == "").cast(StringType()).alias('empty_cnt'),
-            count('*').cast(StringType()).alias('cnt_distinct'))
+            count(when(isnull(at_col), lit(True)).otherwise(lit(None))).cast(StringType()).alias('null_cnt'),
+            count(when(isnan(at_col), lit(True)).otherwise(lit(None))).cast(StringType()).alias('nan_cnt'),
+            count(when(col(at_col) == "", lit(True)).otherwise(lit(None))).cast(StringType()).alias('empty_cnt'),
+            count('*').cast(StringType()).alias('cnt_distinct')).withColumn('column', lit(at_col))
         if 'string' in str(df.schema[at_col].dataType).lower() or 'char' in str(df.schema[at_col].dataType).lower():
             d_vals = [d_val for d_val in df.select(at_col).distinct().collect()]
             num_dup = df.groupby(at_col).agg(count('*').alias('total')).select(spark_max(col('total'))).collect()[0][
@@ -93,7 +94,10 @@ class TableHealth:
             ratio = (len(d_vals) * 1.0) / df.count()
             type = 'category' if (ratio < 0.1) or (num_dup > 1) else 'string'
             if type == 'string':
-                return summary_df.withColumn('type', lit(type))
+                return summary_df.withColumn('type', lit(type)).select('crunch_date', 'data_date', 'column', 'type',
+                                                                       'd_min', 'd_max', 'd_mean', 'd_median', 'd_sum',
+                                                                       'null_cnt', 'nan_cnt', 'empty_cnt',
+                                                                       'cnt_distinct')
             else:
                 cnt_distinct_at_col = df.groupby(self.source_partition, at_col).count()
                 to_map = cnt_distinct_at_col.groupby(self.source_partition).agg(
@@ -117,5 +121,6 @@ class TableHealth:
                 src_col, par_val in
                 itertools.product(src_cols, par_vals)]
             today_date = DateHelper.today_date()
-            summary_by_column_df = reduce(DataFrame.unionAll, summary_by_col_dfs).withColumn('crunch_date', lit(today_date))
+            summary_by_column_df = reduce(DataFrame.unionAll, summary_by_col_dfs).withColumn('crunch_date',
+                                                                                             lit(today_date))
             return summary_by_column_df
