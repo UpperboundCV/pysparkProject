@@ -1,8 +1,10 @@
 import pyspark
-from sparkcore.writer.SparkWriter import SparkWriter
-from sparkcore.TableCreator import TableCreator
-from sparkcore.ColumnDescriptor import ColumnDescriptor
-from sparkcore.helper.DateHelper import DateHelper
+import sys
+
+from .writer.SparkWriter import SparkWriter
+from .TableCreator import TableCreator
+from .ColumnDescriptor import ColumnDescriptor
+from .helper.DateHelper import DateHelper
 from typing import List, Optional
 import itertools
 from pyspark.sql.functions import col, to_json, collect_list, create_map, min, mean, isnull, isnan, count, expr, lit, \

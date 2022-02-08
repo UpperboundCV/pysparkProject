@@ -3,14 +3,12 @@ import pyspark.sql
 from sys import platform
 import os
 
-from sparkcore.TableCreator import TableCreator
 from sparkcore.SparkCore import SparkCore
-from sparkcore.table_health.TableHealth import TableHealth
+from sparkcore.TableHealth import TableHealth
 from sparkcore.writer.TableProperty import TableProperty
 from sparkcore.writer.SparkWriter import SparkWriter
-from pyspark.sql.types import StructType, StructField, StringType, IntegerType, DoubleType
+from pyspark.sql.types import StructType, StructField, StringType, DoubleType
 from sparkcore.ColumnDescriptor import ColumnDescriptor
-from pyspark.sql.functions import to_json, count, col, min, max, mean
 
 if platform == 'linux':
     os.environ["JAVA_HOME"] = "/usr/lib/jvm/java-8-openjdk-amd64/"
