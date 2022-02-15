@@ -44,7 +44,7 @@ class TableCreator:
         if validate_schema_name():
             print(f'environment: {self.env}')
             base = '' if self.env != 'local' else '/tmp'
-            source_or_destination = self.schema.split('_')[1]
+            source_or_destination = self.schema.split('_')[-1]
             if 'ka' in self.schema:
                 base = base + '/data/ka'
                 if 'dev' in self.schema:

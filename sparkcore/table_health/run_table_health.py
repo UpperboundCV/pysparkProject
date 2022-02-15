@@ -34,7 +34,7 @@ if __name__ == "__main__":
             spark_core = SparkCore(env, f'spark_{db_name}.{tb_name}_health')
 
             table_health = TableHealth(spark_session=spark_core.spark_session, source_schema=db_name,
-                                       source_table_name=tb_name)
+                                       source_table_name=tb_name, env=env)
             table_health.save()
 
             table_health_df = spark_core.spark_session.table(f'{table_health.schema}.{table_health.health_table_name}')

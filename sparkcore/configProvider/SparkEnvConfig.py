@@ -12,6 +12,7 @@ class SparkEnvConfig(ConfigProvider):  # next will inherite from config provider
     DRIVER_MEMORY: str = 'driver_memory'
     DEPLOY_MODE: str = 'deploy_mode'
     LOCAL_DIR: str = 'local_dir'
+    MAX_RESULT_SIZE: str ='max_result_size'
     # spark config
     SPARK_EXECUTOR_MEMORY: str = 'spark.executor.memory'
     SPARK_APP_NAME: str = 'spark.app.name'
@@ -20,6 +21,7 @@ class SparkEnvConfig(ConfigProvider):  # next will inherite from config provider
     SPARK_LOCAL_DIR: str = 'spark.local.dir'
     SPARK_MASTER: str = 'spark.master'
     SPARK_DEPLOY_MODE: str = 'spark.submit.deployMode'
+    SPARK_DRIVER_MAXRESULTSIZE: str = 'spark.driver.maxResultSize'
     SPARK_PARTITION_OVERWRITE_MODE: str = 'spark.sql.sources.partitionOverwriteMode'
     HIVE_EXEC_DYNAMIC_PARTITION: str = 'hive.exec.dynamic.partition'
     HIVE_EXEC_DYNAMIC_PARTITION_MODE: str = 'hive.exec.dynamic.partition.mode'
@@ -28,6 +30,9 @@ class SparkEnvConfig(ConfigProvider):  # next will inherite from config provider
         super().__init__('../../sparkEnvConfig/', mode)
         self.mode = mode
         self.job_name = job_name
+        config_name = self.APP_NAME
+        show_config = self.config[self.SPARK].get(f'{self.APP_NAME}_{self.job_name}', '1')
+        print(f'{config_name}:{show_config}')
 
     def get_spark_configs(self) -> List[Tuple[str, str]]:
         base_config_list = [
@@ -42,10 +47,12 @@ class SparkEnvConfig(ConfigProvider):  # next will inherite from config provider
             base_config_list.append((self.SPARK_LOCAL_DIR, self.config[self.SPARK].get(self.LOCAL_DIR, '/tmp')))
         elif self.mode == super().DEV:
             print(f'mode: {super().DEV}')
+            base_config_list.append((self.SPARK_DRIVER_MAXRESULTSIZE, self.config[self.SPARK].get(self.SPARK_DRIVER_MAXRESULTSIZE, '64g')))
             base_config_list.append((self.SPARK_PARTITION_OVERWRITE_MODE, "dynamic"))
             base_config_list.append((self.SPARK_DEPLOY_MODE, self.config[self.SPARK].get(self.DEPLOY_MODE, 'client')))
         elif self.mode == super().PROD:
             print(f'mode: {super().PROD}')
+            base_config_list.append((self.SPARK_DRIVER_MAXRESULTSIZE, self.config[self.SPARK].get(self.SPARK_DRIVER_MAXRESULTSIZE, '64g')))
             base_config_list.append((self.SPARK_PARTITION_OVERWRITE_MODE, "dynamic"))
             base_config_list.append((self.SPARK_DEPLOY_MODE, self.config[self.SPARK].get(self.DEPLOY_MODE, 'cluster')))
         else:
@@ -53,8 +60,12 @@ class SparkEnvConfig(ConfigProvider):  # next will inherite from config provider
         return base_config_list
 
     def get_spark_app_name(self) -> str:
-        return self.config[self.SPARK].get(f'{self.SPARK_APP_NAME}_{self.job_name}',
-                                           f'sparkProject_{self.mode}')  # change default value to YYYYMMDDHHMMSS
+        # force job_name to be defined at calling sparkcore
+        app_name_cnf = self.config[self.SPARK].get(f'{self.APP_NAME}_{self.job_name}',
+                                           self.job_name)  # change default value to YYYYMMDDHHMMSS 
+        print(f'spark_app_name: {app_name_cnf}')
+        return app_name_cnf
 
     def get_spark_master(self) -> str:
-        return self.config[self.SPARK].get(self.SPARK_MASTER, 'local[4]')
+        print(f"spark_master : {self.config[self.SPARK].get(self.MASTER, 'local[4]')}")
+        return self.config[self.SPARK].get(self.MASTER, 'local[4]')
