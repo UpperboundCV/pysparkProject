@@ -1,5 +1,5 @@
 from typing import Any, List, Optional
-from sparkcore.ColumnDescriptor import ColumnDescriptor
+from ColumnDescriptor import ColumnDescriptor
 
 
 class TableProperty:
@@ -19,6 +19,7 @@ class TableProperty:
 
     def column_types_to_str(self, column_specs: List[ColumnDescriptor]) -> str:
         column_types_process = []
+        print(type(column_specs[0]))
         print(','.join([f"{column_spec.name} {column_spec.data_type} " for column_spec in
                 column_specs]))
         if type(column_specs) is list:
