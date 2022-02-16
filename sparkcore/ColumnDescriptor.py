@@ -1,5 +1,5 @@
 class ColumnDescriptor:
-    def __init__(self,column_name: str, data_type: str, comment: str) -> None:
+    def __init__(self, column_name: str, data_type: str, comment: str) -> None:
         self.name = str(column_name)
         self.data_type = str(data_type)
         self.comment = str(comment)
@@ -15,4 +15,3 @@ class ColumnDescriptor:
 
     def to_str(self):
         return str(self.name + "\t" + self.data_type + "\t" + self.comment)
-

@@ -3,9 +3,9 @@ It will create table by automatically providing HDFS path to create table.
 Its input is list of columns of table.
 """
 from typing import Optional, Match, List
-from sparkcore.writer.SparkWriter import SparkWriter
-from sparkcore.writer.TableProperty import TableProperty
-from sparkcore.ColumnDescriptor import ColumnDescriptor
+from writer.SparkWriter import SparkWriter
+from writer.TableProperty import TableProperty
+from ColumnDescriptor import ColumnDescriptor
 from pyspark.sql import SparkSession
 import re
 
