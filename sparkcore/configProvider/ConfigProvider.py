@@ -23,6 +23,7 @@ class ConfigProvider:
             else:
                 print(f'config mode: {self.PROD}')
                 env_config_path += 'prod.ini'
+            print(f'env_config_path:{env_config_path}')
             self.config.read(env_config_path)
         except Exception as e:
             traceback.print_exc(e)
