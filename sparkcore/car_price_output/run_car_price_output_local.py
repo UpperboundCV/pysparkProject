@@ -6,7 +6,7 @@ sys.path.append('/home/up_python/PycharmProjects/pysparkProject/sparkcore')
 from configProvider.ConfigProvider import ConfigProvider
 from SparkCore import SparkCore
 from TableCreator import TableCreator
-from pyspark.sql.functions import col, round, lit
+from pyspark.sql.functions import col, round, lit, substring
 from datetime import datetime
 from ColumnDescriptor import ColumnDescriptor
 from writer.SparkWriter import SparkWriter
@@ -17,7 +17,7 @@ if __name__ == '__main__':
     ap.add_argument("-t", "--table", required=True, help="Table: auction or redbook")
     args = vars(ap.parse_args())
     try:
-        if (args['env'] == 'dev' or args['env'] == 'prod') and (args['table'] == 'auction' or args['table'] == 'redbook'):
+        if args['env'] == 'local' and (args['table'] == 'auction' or args['table'] == 'redbook'):
             now = datetime.now()
             env = args['env']
             result_table = args['table']
@@ -41,21 +41,21 @@ if __name__ == '__main__':
             final_cols = result_df_col + additional_cols
             final_result_df = result_df.join(account_df, on=["ACCOUNT_KEY"]).select(*final_cols)
             # final_result_df.select("ACCOUNT_KEY", *additional_cols).show(truncate=False)
-            pth_month_key = now.strftime("%Y%m")
+            ptn_month_key = now.strftime("%Y%m")
 
             # save result
             if final_result_df.count() > 0:
                 except_col_list = ['gecid', 'collection_number']
-                ka_result_df = final_result_df.withColumn("ptn_month_key", lit(pth_month_key)).where(
+                ka_result_df = final_result_df.withColumn("ptn_month_key", lit(ptn_month_key)).where(
                     col('gecid') == '52800000')
-                ay_result_df = final_result_df.withColumn("ptn_month_key", lit(pth_month_key)).where(
+                ay_result_df = final_result_df.withColumn("ptn_month_key", lit(ptn_month_key)).where(
                     col('gecid') == '60000000')
 
                 result_fields = [ColumnDescriptor(column_name=col_type[0], data_type=col_type[1],
                                                   comment=f'{col_type[0]} in {result_table}') for col_type in
                                  final_result_df.dtypes if col_type[0] not in except_col_list]
                 ptn_fields = [
-                    ColumnDescriptor(column_name='pth_month_key', data_type='string', comment='partition column')]
+                    ColumnDescriptor(column_name='ptn_month_key', data_type='string', comment='partition column')]
                 print('\n'.join([col_detail.name for col_detail in result_fields]))
                 spark_writer = SparkWriter(spark_core.spark_session)
 
@@ -67,8 +67,10 @@ if __name__ == '__main__':
                 if ka_result_df.count() > 0:
                     ka_result_df.drop(*except_col_list).write.format("orc").insertInto(f'ka{result_db}.{result_tb}',
                                                                                        overwrite=True)
-                    ka_export_path = config_provider.config[f'{result_table}_result'].get('ka_export_path')
-                    ka_result_df.where(col('collection_number') >= 6).drop(*except_col_list).toPandas().to_csv(
+                    ka_export_path = config_provider.config[f'{result_table}_result'].get('ka_export_path').replace(
+                        'YYYYMMDD', ptn_month_key)
+                    ka_result_df.where(col('collection_number').substr(1, 1).isin("6", "7", "8", "9")).drop(
+                        *except_col_list).toPandas().to_csv(
                         ka_export_path, index=False)
 
                 ka_df = spark_core.spark_session.table(f'ka{result_db}.{result_tb}')
@@ -83,8 +85,10 @@ if __name__ == '__main__':
                 if ay_result_df.count() > 0:
                     ay_result_df.drop(*except_col_list).write.format("orc").insertInto(f'ay{result_db}.{result_tb}',
                                                                                        overwrite=True)
-                    ay_export_path = config_provider.config[f'{result_table}_result'].get('ay_export_path')
-                    ay_result_df.where(col('collection_number') >= 6).drop(*except_col_list).toPandas().to_csv(
+                    ay_export_path = config_provider.config[f'{result_table}_result'].get('ay_export_path').replace(
+                        'YYYYMMDD', ptn_month_key)
+                    ay_result_df.where(col('collection_number').substr(1, 1).isin("6", "7", "8", "9")).drop(
+                        *except_col_list).toPandas().to_csv(
                         ay_export_path, index=False)
 
                 ay_df = spark_core.spark_session.table(f'ay{result_db}.{result_tb}')
