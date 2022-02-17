@@ -54,9 +54,9 @@ if __name__ == '__main__':
             # save result
             if final_result_df.count() > 0:
                 except_col_list = ['gecid', 'collection_number']
-                ka_result_df = final_result_df.withColumn("ptn_month_key", lit(pth_month_key)) \
+                ka_result_df = final_result_df.withColumn("ptn_month_key", lit(ptn_month_key)) \
                     .where(col('gecid') == '52800000')
-                ay_result_df = final_result_df.withColumn("ptn_month_key", lit(pth_month_key)) \
+                ay_result_df = final_result_df.withColumn("ptn_month_key", lit(ptn_month_key)) \
                     .where(col('gecid') == '60000000')
 
                 result_fields = [ColumnDescriptor(column_name=col_type[0], data_type=col_type[1],
