@@ -11,6 +11,16 @@ from datetime import datetime
 from ColumnDescriptor import ColumnDescriptor
 from writer.SparkWriter import SparkWriter
 
+
+def write_crtl_file(num_row: int, write_file_path: str) -> None:
+    write_str = f"""************Beginning of data************** 
+{num_row}
+************End of Data********************
+    """
+    with open(write_file_path, 'w') as f:
+        f.write(write_str)
+
+
 if __name__ == '__main__':
     ap = argparse.ArgumentParser()
     ap.add_argument("-v", "--env", required=True, help="environment: local, dev, or prod")
@@ -65,13 +75,17 @@ if __name__ == '__main__':
                 ka_table_creator.create()
 
                 if ka_result_df.count() > 0:
-                    ka_result_df.drop(*except_col_list).write.format("orc").insertInto(f'ka{result_db}.{result_tb}',
-                                                                                       overwrite=True)
-                    ka_export_path = config_provider.config[f'{result_table}_result'].get('ka_export_path').replace(
-                        'YYYYMMDD', ptn_month_key)
-                    ka_result_df.where(col('collection_number').substr(1, 1).isin("6", "7", "8", "9")).drop(
-                        *except_col_list).toPandas().to_csv(
-                        ka_export_path, index=False)
+                    ka_result_df.drop(*except_col_list).write.format("orc") \
+                        .insertInto(f'ka{result_db}.{result_tb}', overwrite=True)
+                    ka_export_path = config_provider.config[f'{result_table}_result'].get('ka_export_path') \
+                        .replace('YYYYMMDD', ptn_month_key)
+                    ka_ctl_path = config_provider.config[f'{result_table}_result'].get('ka_ctl_path') \
+                        .replace('YYYYMMDD', ptn_month_key)
+                    ka_result_write_off_df = ka_result_df \
+                        .where(col('collection_number').substr(1, 1).isin("6", "7", "8", "9")) \
+                        .drop(*except_col_list)
+                    ka_result_write_off_df.toPandas().to_csv(ka_export_path, index=False)
+                    write_crtl_file(ka_result_write_off_df.count(), ka_ctl_path)
 
                 ka_df = spark_core.spark_session.table(f'ka{result_db}.{result_tb}')
                 ka_df.show(truncate=False)
@@ -83,13 +97,17 @@ if __name__ == '__main__':
                 ay_table_creator.create()
 
                 if ay_result_df.count() > 0:
-                    ay_result_df.drop(*except_col_list).write.format("orc").insertInto(f'ay{result_db}.{result_tb}',
-                                                                                       overwrite=True)
-                    ay_export_path = config_provider.config[f'{result_table}_result'].get('ay_export_path').replace(
-                        'YYYYMMDD', ptn_month_key)
-                    ay_result_df.where(col('collection_number').substr(1, 1).isin("6", "7", "8", "9")).drop(
-                        *except_col_list).toPandas().to_csv(
-                        ay_export_path, index=False)
+                    ay_result_df.drop(*except_col_list).write.format("orc") \
+                        .insertInto(f'ay{result_db}.{result_tb}', overwrite=True)
+                    ay_export_path = config_provider.config[f'{result_table}_result'].get('ay_export_path') \
+                        .replace('YYYYMMDD', ptn_month_key)
+                    ay_ctl_path = config_provider.config[f'{result_table}_result'].get('ay_ctl_path') \
+                        .replace('YYYYMMDD', ptn_month_key)
+                    ay_result_write_off_df = ay_result_df \
+                        .where(col('collection_number').substr(1, 1).isin("6", "7", "8", "9")) \
+                        .drop(*except_col_list)
+                    ay_result_write_off_df.toPandas().to_csv(ay_export_path, index=False)
+                    write_crtl_file(ay_result_write_off_df.count(), ay_ctl_path)
 
                 ay_df = spark_core.spark_session.table(f'ay{result_db}.{result_tb}')
                 ay_df.show(truncate=False)
