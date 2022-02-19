@@ -7,7 +7,7 @@ os.environ["SPARK_HOME"] = "/opt/cloudera/parcels/CDH/lib/spark/"
 os.environ["PYTHONPATH"] = "/opt/cloudera/parcels/CDH/lib/spark/python"
 os.environ["JAVA_HOME"] = "/usr/java/jdk1.8.0_232-cloudera/"
 sys.path.append("/opt/cloudera/parcels/CDH/lib/spark/python")
-sys.path.append('/nfs/msa/dapscripts/ka/pln/dev/tfm/pys/collection/car_price_output/')
+sys.path.append('/nfs/msa/dapscripts/ka/pln/dev/tfm/pys/collection/car_price_output/sparkcore/')
 sys.path.append("/opt/cloudera/parcels/CDH/lib/spark/python/lib/py4j-0.10.7-src.zip")
 
 from configProvider.ConfigProvider import ConfigProvider
