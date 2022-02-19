@@ -1,19 +1,17 @@
 # IMPORT
 import sys
 import argparse
-
+import pyspark
+from pyspark.sql.types import StructType, StructField, StringType, DoubleType
 # local PySpark Environment
-sys.path.append('/home/up_python/PycharmProjects/pysparkProject/')
+sys.path.append('/home/up_python/PycharmProjects/pysparkProject/sparkcore/')
 
 # HOME MADE PACKAGE
-from sparkcore.TableHealth import TableHealth
-from sparkcore.SparkCore import SparkCore
-import pyspark
-from sparkcore.TableHealth import TableHealth
-from sparkcore.writer.TableProperty import TableProperty
-from sparkcore.writer.SparkWriter import SparkWriter
-from pyspark.sql.types import StructType, StructField, StringType, DoubleType
-from sparkcore.ColumnDescriptor import ColumnDescriptor
+from TableHealth import TableHealth
+from SparkCore import SparkCore
+from writer.TableProperty import TableProperty
+from writer.SparkWriter import SparkWriter
+from ColumnDescriptor import ColumnDescriptor
 
 
 def mock_test_data(spark_session: pyspark.sql.SparkSession) -> pyspark.sql.dataframe.DataFrame:
@@ -26,7 +24,10 @@ def mock_test_data(spark_session: pyspark.sql.SparkSession) -> pyspark.sql.dataf
         StructField('price', DoubleType(), True),
         StructField('brand', StringType(), True)
     ])
-    data = [(date, "a01", 2000.50, 'Mitsu'), (date, "a02", 12345.99, 'Mitsu'), (date, "a03", 10.0, 'Honda')]
+    data = [(date, "a01", 2000.50, 'Mitsu'),
+            (date, "a02", 12345.99, 'Mitsu'),
+            (date, "a03", 10.0, 'Honda'),
+            (date, None, None, None)]
     df = spark_session.createDataFrame(data, schema)
     return df
 
@@ -56,7 +57,7 @@ if __name__ == "__main__":
     ap.add_argument("-t", "--table_name", required=True, help="table name")
     args = vars(ap.parse_args())
     try:
-        if args['env'] == 'dev' or args['env'] == 'prod':
+        if args['env'] == 'local':
             env = args['env']
             db_name = args['schema']
             tb_name = args['table_name']
