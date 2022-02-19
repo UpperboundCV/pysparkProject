@@ -1,14 +1,20 @@
 import pytest
 import pyspark.sql
 from sys import platform
+import sys
 import os
 
-from sparkcore.SparkCore import SparkCore
-from sparkcore.TableHealth import TableHealth
-from sparkcore.writer.TableProperty import TableProperty
-from sparkcore.writer.SparkWriter import SparkWriter
-from pyspark.sql.types import StructType, StructField, StringType, DoubleType
-from sparkcore.ColumnDescriptor import ColumnDescriptor
+# local PySpark Environment
+# sys.path.append('/home/up_python/PycharmProjects/pysparkProject/sparkcore/')
+sys.path.append('../../')
+
+from SparkCore import SparkCore
+from TableHealth import TableHealth
+from writer.TableProperty import TableProperty
+from writer.SparkWriter import SparkWriter
+from pyspark.sql.types import StructType, StructField, StringType, DoubleType, TimestampType
+from pyspark.sql.functions import to_timestamp, col, lit, when
+from ColumnDescriptor import ColumnDescriptor
 
 if platform == 'linux':
     os.environ["JAVA_HOME"] = "/usr/lib/jvm/java-8-openjdk-amd64/"
@@ -36,11 +42,17 @@ def mock_test_data(spark_session: pyspark.sql.SparkSession) -> pyspark.sql.dataf
         StructField('data_date', StringType(), True),
         StructField(account_no, StringType(), True),
         StructField('price', DoubleType(), True),
-        StructField('brand', StringType(), True)
+        StructField('brand', StringType(), True),
+        StructField('buy_time', StringType(), True)
     ])
-    data = [(date, "a01", 2000.50, 'Mitsu'), (date, "a02", 12345.99, 'Mitsu'), (date, "a03", 10.0, 'Honda')]
-    df = spark_session.createDataFrame(data, schema)
+    data = [(date, "a01", 2000.50, 'Mitsu', '2022-02-01 00:00:01'),
+            (date, "a02", 12345.99, 'Mitsu', '2022-02-02 00:00:02'),
+            (date, "a03", None, 'Honda', None),
+            (date, "a04", float("NaN"), None, "")]
+    df = spark_session.createDataFrame(data, schema) \
+        .withColumn('buy_time', to_timestamp(col('buy_time'), 'yyyy-MM-dd HH:mm:ss'))
     return df
+
 
 @pytest.fixture
 def mock_health_table_result(spark_session: pyspark.sql.SparkSession) -> pyspark.sql.dataframe.DataFrame:
@@ -80,7 +92,8 @@ def test_table_health(spark_session: pyspark.sql.SparkSession,
     table_path = '/tmp/mock_cl'
     fields = [ColumnDescriptor('account_no', 'string', '"none"'),
               ColumnDescriptor('price', 'integer', '"none"'),
-              ColumnDescriptor('brand', 'string', '"none"')]
+              ColumnDescriptor('brand', 'string', '"none"'),
+              ColumnDescriptor('buy_time', 'timestamp', 'none')]
     partitions = [ColumnDescriptor('data_date', 'string', '"none"')]
     table_property = TableProperty(db_name=db_name, tb_name=tb_name, table_path=table_path, fields=fields,
                                    partitions=partitions)
@@ -96,6 +109,7 @@ def test_table_health(spark_session: pyspark.sql.SparkSession,
     # create health table
     table_health = TableHealth(spark_session=spark_session, source_schema=db_name, source_table_name=tb_name,
                                env='local')
+
     table_health.save()
 
     table_health_df = spark_session.table(f'{table_health.schema}.{table_health.health_table_name}')
