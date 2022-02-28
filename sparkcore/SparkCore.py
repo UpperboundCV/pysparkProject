@@ -1,18 +1,19 @@
 from pyspark.sql import SparkSession
 from pyspark.conf import SparkConf
 from typing import List, Tuple
+
 try:
     from configProvider.SparkEnvConfig import SparkEnvConfig
-except:# for sparkcore_test
+except:  # for sparkcore_test
     from .configProvider.SparkEnvConfig import SparkEnvConfig
 
 
 class SparkCore:
     is_error = False
 
-    def __init__(self, mode: str, job_name:str="") -> None:
+    def __init__(self, mode: str, job_name: str = "") -> None:
         try:
-            conf_provider = SparkEnvConfig(mode=mode,job_name=job_name)
+            conf_provider = SparkEnvConfig(mode=mode, job_name=job_name)
             self.spark_conf = SparkConf().setAll(pairs=conf_provider.get_spark_configs())
             self.spark_session = SparkSession \
                 .builder \

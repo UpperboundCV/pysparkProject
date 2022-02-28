@@ -13,7 +13,7 @@ class ConfigProvider:
         try:
             current_path = os.path.abspath(os.path.dirname(__file__))
             env_config_path = os.path.join(current_path, config_path)
-            print(f'env_config_path:{env_config_path}')
+            print(f'configp rovider env_config_path:{env_config_path}')
             if mode == self.LOCAL:
                 print(f'config mode: {self.LOCAL}')
                 env_config_path += 'local.ini'
@@ -23,6 +23,7 @@ class ConfigProvider:
             else:
                 print(f'config mode: {self.PROD}')
                 env_config_path += 'prod.ini'
+            print(f'config provider file_config_path:{env_config_path}')
             self.config.read(env_config_path)
         except Exception as e:
             traceback.print_exc(e)
