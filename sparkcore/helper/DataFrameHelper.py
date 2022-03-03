@@ -240,13 +240,7 @@ class DataFrameHelper:
                 .withColumn(cls.MONTH_KEY, lit(0).cast(IntegerType())) \
                 .withColumn(cls.PTN_MONTH_KEY, cls.to_ptn_month_key(data_date_col_name)) \
                 .selectExpr(snap_monthly_df_cols).cache()
-            writed_df.show(n=5, truncate=False)
-            print(writed_df.rdd.getNumPartitions())
             writed_df.repartition(800).write.format("orc").insertInto(snap_month_table, overwrite=True)
-            # writed_df.repartition(500).write.partitionBy(cls.PTN_MONTH_KEY).format("orc").mode("overwrite").saveAsTable(
-            #     snap_month_table)
-            # writed_df.coalesce(5).write.partitionBy(cls.PTN_MONTH_KEY).format("orc").mode("overwrite").saveAsTable(
-            #     snap_month_table)
         else:
             current_snap_month = snap_monthly_df.where(col(cls.MONTH_KEY) == 0).select(
                 max(to_date(data_date_col_name)).cast(StringType())).first()[0]
@@ -259,6 +253,9 @@ class DataFrameHelper:
                 # 1. update from current monthkey = 0 to month key of process_date.
                 print("[1/2] start: update on month key")
                 updated_month_key_df = cls.update_month_key_zero(snap_monthly_df, month_key_df, data_date_col_name)
+                # print("start: show update on month key")
+                # updated_month_key_df.show(n=100, truncate=False)
+                # print("end: show update on month key")
                 updated_month_key_df.selectExpr(snap_monthly_df_cols) \
                     .write.format("orc").insertInto(snap_month_table, overwrite=True)
                 print("[1/2] end: update on month key")
@@ -458,7 +455,8 @@ class DataFrameHelper:
             .where(col("year").cast(IntegerType()) == int(zero_month_key_last_date.year)) \
             .select(max(cls.MONTH_KEY)).first()[0]
         print(f"month key: {month_key}")
-        return snap_monthly_df.where(col(cls.MONTH_KEY) == 0).withColumn(cls.MONTH_KEY, lit(month_key)) \
+        return snap_monthly_df.where(col(cls.MONTH_KEY) == 0)\
+            .withColumn(cls.MONTH_KEY, lit(month_key)) \
             .withColumn(cls.PTN_MONTH_KEY, cls.to_ptn_month_key(data_date_col_name))
 
 
