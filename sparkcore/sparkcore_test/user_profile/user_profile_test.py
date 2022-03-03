@@ -182,8 +182,8 @@ def mock_initial_ext_ka_user_entity(
 
 @pytest.fixture
 def mock_2nd_ext_ka_user_entity(
-        mock_ay_user_entity: pyspark.sql.dataframe.DataFrame) -> pyspark.sql.dataframe.DataFrame:
-    return mock_ay_user_entity.withColumn('sent_date',
+        mock_ka_user_entity: pyspark.sql.dataframe.DataFrame) -> pyspark.sql.dataframe.DataFrame:
+    return mock_ka_user_entity.withColumn('sent_date',
                                           to_timestamp(lit('2022-01-01 15:02:59'),
                                                        DateHelper.HIVE_TIMESTAMP_FORMAT)) \
         .withColumn('status', when(col('status').isNull(), lit('Active')).otherwise(col('status')))
@@ -191,8 +191,8 @@ def mock_2nd_ext_ka_user_entity(
 
 @pytest.fixture
 def mock_3rd_ext_ka_user_entity(
-        mock_ay_user_entity: pyspark.sql.dataframe.DataFrame) -> pyspark.sql.dataframe.DataFrame:
-    return mock_ay_user_entity.withColumn('sent_date',
+        mock_ka_user_entity: pyspark.sql.dataframe.DataFrame) -> pyspark.sql.dataframe.DataFrame:
+    return mock_ka_user_entity.withColumn('sent_date',
                                           to_timestamp(lit('2022-01-02 16:00:01'),
                                                        DateHelper.HIVE_TIMESTAMP_FORMAT)) \
         .withColumn('status', when(col('status') == 'Inactive', lit('Active')).otherwise(col('status')))
@@ -331,8 +331,8 @@ def process_user_profile(spark_session: pyspark.sql.SparkSession,
         .withColumn('user_login', when(col('user_login').contains("_none"), lit(None)).otherwise(col('user_login')))
     uam_df.show(n=100, truncate=False)
     # add entity_uam back to transaction_df
-    transaction_w_entity_uam_df = ay_transaction_df.join(uam_df, on=['user_login'],
-                                                         how='left') if entity == 'ay' else ka_transaction_df.join(
+    transaction_w_entity_uam_df = ext_ay_input_user_profile.join(uam_df, on=['user_login'],
+                                                                 how='left') if entity == 'ay' else ext_ka_input_user_profile.join(
         uam_df, on=['user_login'], how='left')
     transaction_w_entity_uam_df.show(n=100, truncate=False)
     # add user_type
@@ -362,7 +362,9 @@ def test_snap_monthly_without_status(mock_initial_ext_ay_user_entity: pyspark.sq
     spark_session.sparkContext.setCheckpointDir("/tmp/checkpoint")
     config_path = '../sparkcore_test/user_profile/config/'
     entity = 'ay'
+
     snap_monthly_table_config = TableConfig(config_path, 'local', f'{entity}_irepo_user_profile')
+    spark_session.sql(f"drop table if exists {snap_monthly_table_config.db_name}.{snap_monthly_table_config.tb_name}")
     snap_monthly_table_property = TableProperty(db_name=snap_monthly_table_config.db_name,
                                                 tb_name=snap_monthly_table_config.tb_name,
                                                 table_path=snap_monthly_table_config.table_path,
@@ -388,10 +390,28 @@ def test_snap_monthly_without_status(mock_initial_ext_ay_user_entity: pyspark.sq
                          snap_month_table=snap_month_table)
 
     snap_month_table_df = spark_session.table(snap_month_table)
-    snap_month_table_df.show(n=100, truncate=False)
-    snap_month_table_df.groupby('ptn_month_key', 'month_key', 'user_type', 'entity_uam').agg(count('*').alias('total')) \
+    snap_month_table_df.where(col('month_key') == 0).sort(col('ptn_month_key').desc(), col('user_type')).show(n=100,
+                                                                                                              truncate=False)
+    snap_month_table_df.groupby('ptn_month_key', 'month_key', 'user_type',
+                                'entity_uam').agg(count('*').alias('total')) \
         .orderBy('ptn_month_key', 'month_key', 'user_type', 'entity_uam') \
-        .show(truncate=False)
+        .show(n=100, truncate=False)
+    # +-------------+---------+---------+----------+-----+
+    # +-------------+---------+---------+----------+-----+
+    # | ptn_month_key | month_key | user_type | entity_uam | total |
+    # +-------------+---------+---------+----------+-----+
+    # | 202112 | 0 | CR | null | 2 |
+    # | 202112 | 0 | CR | | 2 |
+    # | 202112 | 0 | CR | Auto | 1 |
+    # | 202112 | 0 | CR | Aycal | 3 |
+    # | 202112 | 0 | CR | Bay | 2 |
+    # | 202112 | 0 | Other | null | 3 |
+    # | 202112 | 0 | STAFF | null | 2 |
+    # | 202112 | 0 | STAFF | | 2 |
+    # | 202112 | 0 | STAFF | Auto | 1 |
+    # | 202112 | 0 | STAFF | Aycal | 3 |
+    # | 202112 | 0 | STAFF | Bay | 2 |
+    # +-------------+---------+---------+----------+-----+
     # #############################################################################################
     # # 2nd batch
     process_user_profile(spark_session=spark_session, ay_transaction_df=mock_2nd_ext_ay_user_entity,
@@ -404,25 +424,29 @@ def test_snap_monthly_without_status(mock_initial_ext_ay_user_entity: pyspark.sq
                          snap_month_table=snap_month_table)
 
     snap_month_table_df = spark_session.table(snap_month_table)
-    snap_month_table_df.show(n=100, truncate=False)
-    snap_month_table_df.groupby('ptn_month_key', 'month_key', 'user_type', 'entity_uam').agg(count('*').alias('total')) \
+    snap_month_table_df.where(col('month_key') == 0).sort(col('ptn_month_key').desc(), col('user_type')).show(n=100,
+                                                                                                              truncate=False)
+    snap_month_table_df.groupby('ptn_month_key', 'month_key', 'user_type',
+                                'entity_uam').agg(count('*').alias('total')) \
         .orderBy('ptn_month_key', 'month_key', 'user_type', 'entity_uam') \
-        .show(truncate=False)
+        .show(n=100, truncate=False)
+
     # # #############################################################################################
     # # 3rd batch
-    # process_user_profile(spark_session=spark_session, ay_transaction_df=mock_3rd_ext_ay_user_entity,
-    #                      ka_transaction_df=mock_3rd_ext_ka_user_entity,
-    #                      entity=entity,
-    #                      month_key_df=mock_month_key_df,
-    #                      process_date='2022-01-02',
-    #                      today_date='2022-01-03',
-    #                      data_date_col_name='data_date',
-    #                      snap_month_table=snap_month_table)
-    #
-    # snap_month_table_df = spark_session.table(snap_month_table)
-    # snap_month_table_df.show(n=100, truncate=False)
-    # snap_month_table_df.groupby('ptn_month_key', 'month_key', 'user_type', 'entity_uam').agg(count('*').alias('total')) \
-    #     .orderBy('ptn_month_key', 'month_key', 'user_type', 'entity_uam') \
-    #     .show(truncate=False)
-    #
-    # spark_session.sql(f'drop table if exists {snap_month_table}')
+    process_user_profile(spark_session=spark_session, ay_transaction_df=mock_3rd_ext_ay_user_entity,
+                         ka_transaction_df=mock_3rd_ext_ka_user_entity,
+                         entity=entity,
+                         month_key_df=mock_month_key_df,
+                         process_date='2022-01-02',
+                         today_date='2022-01-03',
+                         data_date_col_name='data_date',
+                         snap_month_table=snap_month_table)
+
+    snap_month_table_df = spark_session.table(snap_month_table)
+    snap_month_table_df.where(col('month_key') == 0).sort(col('ptn_month_key').desc(), col('user_type')).show(n=100,
+                                                                                                              truncate=False)
+    snap_month_table_df.groupby('ptn_month_key', 'month_key', 'user_type', 'entity_uam').agg(count('*').alias('total')) \
+        .orderBy('ptn_month_key', 'month_key', 'user_type', 'entity_uam') \
+        .show(n=100, truncate=False)
+
+    spark_session.sql(f'drop table if exists {snap_month_table}')
