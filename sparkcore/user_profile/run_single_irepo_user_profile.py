@@ -16,8 +16,15 @@ from pyspark.sql.types import StructType, StructField, StringType, DateType, Tim
     DoubleType
 from pyspark.sql.functions import date_trunc, to_timestamp, when, length
 from typing import List, Optional, Dict
+import itertools
 
-sys.path.append('/home/up_python/PycharmProjects/pysparkProject/sparkcore')
+# cdp PySpark Environment
+os.environ["SPARK_HOME"] = "/opt/cloudera/parcels/CDH/lib/spark/"
+os.environ["PYTHONPATH"] = "/opt/cloudera/parcels/CDH/lib/spark/python"
+os.environ["JAVA_HOME"] = "/usr/java/jdk1.8.0_232-cloudera/"
+sys.path.append("/opt/cloudera/parcels/CDH/lib/spark/python")
+sys.path.append('/nfs/msa/dapscripts/ka/pln/dev/tfm/pys/collection/user_profile/sparkcore/')
+sys.path.append("/opt/cloudera/parcels/CDH/lib/spark/python/lib/py4j-0.10.7-src.zip")
 
 from reader.SparkReader import SparkReader
 from SparkCore import SparkCore
@@ -26,63 +33,6 @@ from helper.DateHelper import DateHelper
 from configProvider.TableConfig import TableConfig
 from writer.TableProperty import TableProperty
 from writer.SparkWriter import SparkWriter
-import itertools
-
-if platform == 'linux':
-    os.environ["JAVA_HOME"] = "/usr/lib/jvm/java-8-openjdk-amd64/"
-
-
-def mock_ay_lookup_product_keys(spark_session: pyspark.sql.SparkSession) -> pyspark.sql.dataframe.DataFrame:
-    date = '2021-10-27'
-    data = [("1234abc", "MC"),
-            ("567xyz", "HP")]
-    schema = StructType([
-        StructField("product_key", StringType(), False),
-        StructField("product_id", StringType(), False)
-    ])
-    df = spark_session.createDataFrame(data, schema)
-    return df
-
-
-def mock_ka_lookup_product_keys(spark_session: pyspark.sql.SparkSession) -> pyspark.sql.dataframe.DataFrame:
-    date = '2021-10-27'
-    data = [("67894abc", "MC"),
-            ("12345qwe", "HP")]
-    schema = StructType([
-        StructField("product_key", StringType(), False),
-        StructField("product_id", StringType(), False)
-    ])
-    df = spark_session.createDataFrame(data, schema)
-    return df
-
-
-def get_look_up_product_keys_by_entity(entity: str, spark_session: pyspark.sql.SparkSession) -> Optional[
-    pyspark.sql.dataframe.DataFrame]:
-    if entity == 'ay':
-        return mock_ay_lookup_product_keys(spark_session)
-    elif entity == 'ka':
-        return mock_ka_lookup_product_keys(spark_session)
-    else:
-        raise TypeError("entity is not recognized.")
-
-
-def mock_month_key_df(spark_session: pyspark.sql.SparkSession) -> pyspark.sql.dataframe.DataFrame:
-    data = [(321, "September", 9, "Q3", "2021", "2021 Q3", "2021/09"),
-            (322, "October", 10, "Q4", "2021", "2021 Q4", "2021/10"),
-            (323, "November", 11, "Q4", "2021", "2021 Q4", "2021/11"),
-            (324, "December", 12, "Q4", "2021", "2021 Q4", "2021/12"),
-            (325, "January", 1, "Q1", "2022", "2022 Q1", "2022/01")]
-    schema = StructType([
-        StructField("month_key", IntegerType(), False),
-        StructField("month_text", StringType(), False),
-        StructField("month_number", IntegerType(), False),
-        StructField("fiscal_period", StringType(), False),
-        StructField("year", StringType(), False),
-        StructField("period_and_year", StringType(), False),
-        StructField("month_and_year", StringType(), False)
-    ])
-    df = spark_session.createDataFrame(data, schema)
-    return df
 
 
 def cdp_product_key(config_path: str, env: str, config_name: str) -> pyspark.sql.dataframe.DataFrame:
@@ -144,19 +94,6 @@ def get_entity_uam_df(ext_ay_input_user_profile: pyspark.sql.dataframe.DataFrame
 
     return final_result
 
-
-def ay_mapping_date_and_source_file() -> Dict[str, str]:
-    return {'2021-12-31': '../pysparkProject/sparkcore/user_profile/data/ay_user_profile_20211231_184543.txt',
-            '2022-01-01': '../pysparkProject/sparkcore/user_profile/data/ay_user_profile_20220101_115726.txt',
-            '2022-01-02': '../pysparkProject/sparkcore/user_profile/data/ay_user_profile_20220102_115934.txt'}
-
-
-def ka_mapping_date_and_source_file() -> Dict[str, str]:
-    return {'2021-12-31': '../pysparkProject/sparkcore/user_profile/data/ka_user_profile_20211231_185223.txt',
-            '2022-01-01': '../pysparkProject/sparkcore/user_profile/data/ka_user_profile_20220101_115733.txt',
-            '2022-01-02': '../pysparkProject/sparkcore/user_profile/data/ka_user_profile_20220102_115920.txt'}
-
-
 def ext_user_profile_schema() -> List[str]:
     return ['user_login',
             'user_status',
@@ -187,54 +124,6 @@ def ext_user_profile_schema() -> List[str]:
             'sent_date']
 
 
-def user_profile_transaction_df(spark_session: pyspark.sql.SparkSession,
-                                source_txt_path: str,
-                                process_date: str,
-                                today_date: str) -> pyspark.sql.dataframe.DataFrame:
-    end_date = '9000-12-31'
-    business_date = process_date + ' 00:00:00'
-    load_date = process_date + ' 23:59:59'
-    record_deleted_flag = 0
-    pipeline_name = 'test ingestion in local'
-    execution_id = '1'
-    spark_reader = SparkReader(spark_session)
-    df = spark_reader.read_txt_file(txt_path=source_txt_path,
-                                    have_header=False,
-                                    delimiter='~', is_infershema=True)
-    col_names = df.columns
-    user_profile_cols = ext_user_profile_schema()
-    expr_str = [f'{col_names[i]} as {user_profile_cols[i]}' for i in range(len(user_profile_cols))]
-    ext_user_profile_df = df.selectExpr(*expr_str)
-    return ext_user_profile_df \
-        .withColumn("start_date", lit(today_date).cast(DateType())) \
-        .withColumn('end_date', lit(end_date).cast(DateType())) \
-        .withColumn('business_date', lit(business_date).cast(TimestampType())) \
-        .withColumn('load_date', lit(load_date).cast(TimestampType())) \
-        .withColumn('record_deleted_flag', lit(record_deleted_flag).cast(IntegerType())) \
-        .withColumn('pipeline_name', lit(pipeline_name)) \
-        .withColumn('execution_id', lit(execution_id).cast(IntegerType())) \
-        .withColumn('updated_date', to_timestamp(col('updated_date'), DateHelper.HIVE_TIMESTAMP_FORMAT)) \
-        .withColumn('create_date', to_timestamp(col('create_date'), DateHelper.HIVE_TIMESTAMP_FORMAT)) \
-        .withColumn('sent_date', to_timestamp(col('sent_date'), DateHelper.HIVE_TIMESTAMP_FORMAT))
-
-
-def get_user_profile_transaction_df(spark_session: pyspark.sql.SparkSession,
-                                    process_date: str,
-                                    today_date: str,
-                                    entity: str) -> pyspark.sql.dataframe.DataFrame:
-    print(f'file path name ay: {ay_mapping_date_and_source_file()[process_date]}')
-    print(f'file path name ka: {ka_mapping_date_and_source_file()[process_date]}')
-    ay_trans_df = user_profile_transaction_df(spark_session,
-                                              ay_mapping_date_and_source_file()[process_date],
-                                              process_date,
-                                              today_date)
-    ka_trans_df = user_profile_transaction_df(spark_session,
-                                              ka_mapping_date_and_source_file()[process_date],
-                                              process_date,
-                                              today_date)
-    return ay_trans_df if entity == 'ay' else ka_trans_df
-
-
 def process_user_profile_from_pst_to_crt(spark_session: pyspark.sql.SparkSession,
                                          ay_transaction_df: pyspark.sql.dataframe.DataFrame,
                                          ka_transaction_df: pyspark.sql.dataframe.DataFrame,
@@ -247,7 +136,6 @@ def process_user_profile_from_pst_to_crt(spark_session: pyspark.sql.SparkSession
                                          snap_month_table: str) -> None:
     ext_ay_input_user_profile = ay_transaction_df.withColumn('sent_date',
                                                              date_trunc("day", col('sent_date')))
-    # ext_ay_input_user_profile.show(truncate=False)
 
     ext_ka_input_user_profile = ka_transaction_df.withColumn('sent_date',
                                                              date_trunc("day", col('sent_date')))
@@ -255,9 +143,9 @@ def process_user_profile_from_pst_to_crt(spark_session: pyspark.sql.SparkSession
     uam_df = get_entity_uam_df(ext_ay_input_user_profile, ext_ka_input_user_profile)
 
     # add entity_uam back to transaction_df
-    transaction_w_entity_uam_df = ext_ay_input_user_profile.join(uam_df, on=['user_login'],
-                                                                 how='left') if entity == 'ay' else ext_ka_input_user_profile.join(
-        uam_df, on=['user_login'], how='left')
+    transaction_w_entity_uam_df = ext_ay_input_user_profile \
+        .join(uam_df, on=['user_login'],how='left') if entity == 'ay' else ext_ka_input_user_profile \
+        .join(uam_df, on=['user_login'], how='left')
     # transaction_w_entity_uam_df.show(n=100, truncate=False)
     # add user_type
     transaction_w_user_type_df = transaction_w_entity_uam_df \
@@ -270,19 +158,19 @@ def process_user_profile_from_pst_to_crt(spark_session: pyspark.sql.SparkSession
     print('rename column: updated_date -> web_updated_date')
     print('rename column: create_date -> web_create_date')
     print('rename column: sent_date -> data_date')
-    # transaction_w_user_type_df.show(n=7, truncate=False)
+
     intermediate_w_product_key_df = DataFrameHelper.with_short_product_key(transaction_w_user_type_df).repartition(
         col('product_key'))
-    # intermediate_w_product_key_df.show(n=8, truncate=False)
+
     print('add product key')
     intermediate_w_gecid_df = DataFrameHelper.with_gecid(intermediate_w_product_key_df)
-    # intermediate_w_gecid_df.show(n=9, truncate=False)
+
     print('add gecid')
     intermediate_w_entity_df = DataFrameHelper.with_entity(intermediate_w_gecid_df)
-    # intermediate_w_entity_df.show(n=10, truncate=False)
+
     print('add entity')
     intermediate_w_branch_key_df = DataFrameHelper.with_branch_key(intermediate_w_entity_df).cache()
-    # intermediate_w_branch_key_df.show(n=11, truncate=False)
+
     print('add branch key')
 
     DataFrameHelper.update_insert_snap_monthly_to_table(transaction_df=intermediate_w_branch_key_df,
@@ -293,7 +181,6 @@ def process_user_profile_from_pst_to_crt(spark_session: pyspark.sql.SparkSession
                                                         snap_month_table=snap_month_table
                                                         )
 
-
 if __name__ == '__main__':
     ap = argparse.ArgumentParser()
     ap.add_argument("-v", "--env", required=True, help="environment: local, dev, or prod")
@@ -301,7 +188,7 @@ if __name__ == '__main__':
     ap.add_argument("-p", "--process_date", required=True, help="data date to process")
     args = vars(ap.parse_args())
     try:
-        if args['env'] == 'local':
+        if args['env'] == 'dev' or args['env'] == 'prod':
             env = args['env']
             entity = args['entity']
             process_date = args['process_date']
@@ -316,44 +203,28 @@ if __name__ == '__main__':
             # ay
             ay_trans_user_profile_conf = TableConfig(config_path, env, f"ay_user_profile_persist")
             ay_trans_user_profile_table = f'{ay_trans_user_profile_conf.db_name}.{ay_trans_user_profile_conf.tb_name}'
-            ay_trans_user_profile_df = (get_user_profile_transaction_df(spark_core.spark_session, process_date,
-                                                                        today_date,
-                                                                        'ay') if env == 'local' else spark_core.spark_session.table(
-                ay_trans_user_profile_table)) \
+            ay_trans_user_profile_df = spark_core.spark_session.table(ay_trans_user_profile_table) \
                 .where(DateHelper.timestamp2str(col('sent_date')) == process_date)
             num_row_ay_input_row = ay_trans_user_profile_df.count()
-            # ay_trans_user_profile_df.where(col('user_login') == 'PUNBOOPA').show(n=5, truncate=False)
-            ay_trans_user_profile_df.show(n=5, truncate=False)
             print(f'num_row_ay_row: {num_row_ay_input_row}')
             # ka
             ka_trans_user_profile_conf = TableConfig(config_path, env, f"ka_user_profile_persist")
             ka_trans_user_profile_table = f'{ka_trans_user_profile_conf.db_name}.{ka_trans_user_profile_conf.tb_name}'
-            ka_trans_user_profile_df = (get_user_profile_transaction_df(spark_core.spark_session, process_date,
-                                                                        today_date,
-                                                                        'ka') if env == 'local' else spark_core.spark_session.table(
-                ka_trans_user_profile_table)) \
+            ka_trans_user_profile_df = spark_core.spark_session.table(ka_trans_user_profile_table) \
                 .where(DateHelper.timestamp2str(col('sent_date')) == process_date)
             num_row_ka_input_row = ka_trans_user_profile_df.count()
-            # ka_trans_user_profile_df.where(col('user_login') == 'PUNBOOPA').show(n=5, truncate=False)
-            ka_trans_user_profile_df.show(n=5, truncate=False)
             print(f'num_row_ka_row: {num_row_ka_input_row}')
             if num_row_ay_input_row == 0 | num_row_ka_input_row == 0:
                 ay_report = f'{ay_trans_user_profile_table}:{num_row_ay_input_row}'
                 ka_report = f'{ka_trans_user_profile_table}:{num_row_ka_input_row}'
                 raise TypeError(f"one of transaction input df's is empty => {ay_report}  | {ka_report} ")
-            # # # #
-            # # ay_trans_user_profile_df.show(n=5, truncate=False)
-            # # ka_trans_user_profile_df.show(n=5, truncate=False)
-            # # #
+
             # # # # Get product key look up DF
-            product_key_df = (get_look_up_product_keys_by_entity(entity,
-                                                                 spark_core.spark_session) if env == 'local' else cdp_product_key(
-                f'{entity}_product_key'))
-            # # # #
+            product_key_df =  cdp_product_key(f'{entity}_product_key')
+
             # # # # # Get month key look up DF
-            month_key_df = (
-                mock_month_key_df(spark_core.spark_session) if env == 'local' else cdp_month_key(f'{entity}_month_key'))
-            # # #
+            month_key_df = cdp_month_key(f'{entity}_month_key')
+
             # # # # Get snap month table name
             snap_monthly_table_config = TableConfig(config_path, env, f'{entity}_user_profile_curate')
             snap_monthly_table = f'{snap_monthly_table_config.db_name}.{snap_monthly_table_config.tb_name}'
@@ -370,7 +241,7 @@ if __name__ == '__main__':
                                                                delimitor=None))
             snap_monthly_writer = SparkWriter(spark_core.spark_session)
             snap_monthly_writer.create_table(snap_monthly_table_property)
-            # # # #
+
             process_user_profile_from_pst_to_crt(spark_session=spark_core.spark_session,
                                                  ay_transaction_df=ay_trans_user_profile_df,
                                                  ka_transaction_df=ka_trans_user_profile_df,
@@ -381,7 +252,7 @@ if __name__ == '__main__':
                                                  today_date=today_date,
                                                  data_date_col_name='data_date',
                                                  snap_month_table=snap_monthly_table)
-            # #
+
             snap_month_df = spark_core.spark_session.table(snap_monthly_table)
             snap_month_df.show(n=5, truncate=False)
             snap_month_df.groupBy('ptn_month_key', 'user_type', 'status', 'entity_uam').agg(
