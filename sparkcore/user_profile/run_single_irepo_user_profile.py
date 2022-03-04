@@ -94,6 +94,7 @@ def get_entity_uam_df(ext_ay_input_user_profile: pyspark.sql.dataframe.DataFrame
 
     return final_result
 
+
 def ext_user_profile_schema() -> List[str]:
     return ['user_login',
             'user_status',
@@ -144,7 +145,7 @@ def process_user_profile_from_pst_to_crt(spark_session: pyspark.sql.SparkSession
 
     # add entity_uam back to transaction_df
     transaction_w_entity_uam_df = ext_ay_input_user_profile \
-        .join(uam_df, on=['user_login'],how='left') if entity == 'ay' else ext_ka_input_user_profile \
+        .join(uam_df, on=['user_login'], how='left') if entity == 'ay' else ext_ka_input_user_profile \
         .join(uam_df, on=['user_login'], how='left')
     # transaction_w_entity_uam_df.show(n=100, truncate=False)
     # add user_type
@@ -180,6 +181,7 @@ def process_user_profile_from_pst_to_crt(spark_session: pyspark.sql.SparkSession
                                                         spark_session=spark_session,
                                                         snap_month_table=snap_month_table
                                                         )
+
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser()
@@ -220,7 +222,7 @@ if __name__ == '__main__':
                 raise TypeError(f"one of transaction input df's is empty => {ay_report}  | {ka_report} ")
 
             # # # # Get product key look up DF
-            product_key_df =  cdp_product_key(f'{entity}_product_key')
+            product_key_df = cdp_product_key(f'{entity}_product_key')
 
             # # # # # Get month key look up DF
             month_key_df = cdp_month_key(f'{entity}_month_key')
