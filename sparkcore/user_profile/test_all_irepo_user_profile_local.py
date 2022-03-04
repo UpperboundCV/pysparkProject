@@ -273,16 +273,12 @@ def process_user_profile_from_pst_to_crt(spark_session: pyspark.sql.SparkSession
     # transaction_w_user_type_df.show(n=7, truncate=False)
     intermediate_w_product_key_df = DataFrameHelper.with_short_product_key(transaction_w_user_type_df).repartition(
         col('product_key'))
-    # intermediate_w_product_key_df.show(n=8, truncate=False)
     print('add product key')
     intermediate_w_gecid_df = DataFrameHelper.with_gecid(intermediate_w_product_key_df)
-    # intermediate_w_gecid_df.show(n=9, truncate=False)
     print('add gecid')
     intermediate_w_entity_df = DataFrameHelper.with_entity(intermediate_w_gecid_df)
-    # intermediate_w_entity_df.show(n=10, truncate=False)
     print('add entity')
     intermediate_w_branch_key_df = DataFrameHelper.with_branch_key(intermediate_w_entity_df).cache()
-    # intermediate_w_branch_key_df.show(n=11, truncate=False)
     print('add branch key')
 
     DataFrameHelper.update_insert_snap_monthly_to_table(transaction_df=intermediate_w_branch_key_df,
@@ -295,99 +291,84 @@ def process_user_profile_from_pst_to_crt(spark_session: pyspark.sql.SparkSession
 
 
 if __name__ == '__main__':
-    ap = argparse.ArgumentParser()
-    ap.add_argument("-v", "--env", required=True, help="environment: local, dev, or prod")
-    ap.add_argument("-e", "--entity", required=True, help="entity: it can be only ka or ay (lower case)")
-    ap.add_argument("-p", "--process_date", required=True, help="data date to process")
-    args = vars(ap.parse_args())
-    try:
-        if args['env'] == 'local':
-            env = args['env']
-            entity = args['entity']
-            process_date = args['process_date']
-            config_path = "../user_profile/config/"
-            today_date = datetime.now().strftime('%Y-%m-%d')
-            # instantiate spark session
-            spark_core = SparkCore(env, f"{entity}_user_profile_{process_date}")
+    env = 'local'
+    config_path = "../user_profile/config/"
+    today_date = datetime.now().strftime('%Y-%m-%d')
+    process_dates = ay_mapping_date_and_source_file().keys()
+    entities = ['ka', 'ay']
+    # instantiate spark session
+    spark_core = SparkCore(env, f"process_user_profile_local")
+    spark_core.spark_session.sparkContext.setLogLevel("ERROR")
+    spark_core.spark_session.sql(f'drop table if exists kadev_pst_test.ext_irepo_user_profile')
+    spark_core.spark_session.sql(f'drop table if exists aydev_pst_test.ext_irepo_user_profile')
+    for entity, process_date in itertools.product(entities, process_dates):
+        # Get transaction user profile Df
+        # ay
+        ay_trans_user_profile_conf = TableConfig(config_path, env, f"ay_user_profile_persist")
+        ay_trans_user_profile_table = f'{ay_trans_user_profile_conf.db_name}.{ay_trans_user_profile_conf.tb_name}'
+        ay_trans_user_profile_df = (
+            get_user_profile_transaction_df(spark_core.spark_session, process_date, today_date,
+                                            'ay') if env == 'local' else spark_core.spark_session.table(
+                ay_trans_user_profile_table)).where(DateHelper.timestamp2str(col('sent_date')) == process_date)
+        num_row_ay_input_row = ay_trans_user_profile_df.count()
 
-            spark_core.spark_session.sparkContext.setLogLevel("ERROR")
+        print(f'num_row_ay_row: {num_row_ay_input_row}')
+        # ka
+        ka_trans_user_profile_conf = TableConfig(config_path, env, f"ka_user_profile_persist")
+        ka_trans_user_profile_table = f'{ka_trans_user_profile_conf.db_name}.{ka_trans_user_profile_conf.tb_name}'
+        ka_trans_user_profile_df = (
+            get_user_profile_transaction_df(spark_core.spark_session, process_date, today_date,
+                                            'ka') if env == 'local' else spark_core.spark_session.table(
+                ka_trans_user_profile_table)).where(DateHelper.timestamp2str(col('sent_date')) == process_date)
+        num_row_ka_input_row = ka_trans_user_profile_df.count()
 
-            # Get transaction user profile Df
-            # ay
-            ay_trans_user_profile_conf = TableConfig(config_path, env, f"ay_user_profile_persist")
-            ay_trans_user_profile_table = f'{ay_trans_user_profile_conf.db_name}.{ay_trans_user_profile_conf.tb_name}'
-            ay_trans_user_profile_df = (get_user_profile_transaction_df(spark_core.spark_session, process_date,
-                                                                        today_date,
-                                                                        'ay') if env == 'local' else spark_core.spark_session.table(
-                ay_trans_user_profile_table)) \
-                .where(DateHelper.timestamp2str(col('sent_date')) == process_date)
-            num_row_ay_input_row = ay_trans_user_profile_df.count()
-            # ay_trans_user_profile_df.where(col('user_login') == 'PUNBOOPA').show(n=5, truncate=False)
-            ay_trans_user_profile_df.show(n=5, truncate=False)
-            print(f'num_row_ay_row: {num_row_ay_input_row}')
-            # ka
-            ka_trans_user_profile_conf = TableConfig(config_path, env, f"ka_user_profile_persist")
-            ka_trans_user_profile_table = f'{ka_trans_user_profile_conf.db_name}.{ka_trans_user_profile_conf.tb_name}'
-            ka_trans_user_profile_df = (get_user_profile_transaction_df(spark_core.spark_session, process_date,
-                                                                        today_date,
-                                                                        'ka') if env == 'local' else spark_core.spark_session.table(
-                ka_trans_user_profile_table)) \
-                .where(DateHelper.timestamp2str(col('sent_date')) == process_date)
-            num_row_ka_input_row = ka_trans_user_profile_df.count()
-            # ka_trans_user_profile_df.where(col('user_login') == 'PUNBOOPA').show(n=5, truncate=False)
-            ka_trans_user_profile_df.show(n=5, truncate=False)
-            print(f'num_row_ka_row: {num_row_ka_input_row}')
-            if num_row_ay_input_row == 0 | num_row_ka_input_row == 0:
-                ay_report = f'{ay_trans_user_profile_table}:{num_row_ay_input_row}'
-                ka_report = f'{ka_trans_user_profile_table}:{num_row_ka_input_row}'
-                raise TypeError(f"one of transaction input df's is empty => {ay_report}  | {ka_report} ")
-            # # # #
-            # # ay_trans_user_profile_df.show(n=5, truncate=False)
-            # # ka_trans_user_profile_df.show(n=5, truncate=False)
-            # # #
-            # # # # Get product key look up DF
-            product_key_df = (get_look_up_product_keys_by_entity(entity,
-                                                                 spark_core.spark_session) if env == 'local' else cdp_product_key(
-                f'{entity}_product_key'))
-            # # # #
-            # # # # # Get month key look up DF
-            month_key_df = (
-                mock_month_key_df(spark_core.spark_session) if env == 'local' else cdp_month_key(f'{entity}_month_key'))
-            # # #
-            # # # # Get snap month table name
-            snap_monthly_table_config = TableConfig(config_path, env, f'{entity}_user_profile_curate')
-            snap_monthly_table = f'{snap_monthly_table_config.db_name}.{snap_monthly_table_config.tb_name}'
-            # # # Create snap monthly table if it doesn't exist
-            snap_monthly_table_property = TableProperty(db_name=snap_monthly_table_config.db_name,
-                                                        tb_name=snap_monthly_table_config.tb_name,
-                                                        table_path=snap_monthly_table_config.table_path,
-                                                        fields=snap_monthly_table_config.fields,
-                                                        partitions=snap_monthly_table_config.partitions)
-            print(snap_monthly_table_property.database)
-            print(snap_monthly_table_property.table)
-            print(snap_monthly_table_property.table_path)
-            print(snap_monthly_table_property.create_table_sql(table_format=snap_monthly_table_property.ORC_FORMAT,
-                                                               delimitor=None))
-            snap_monthly_writer = SparkWriter(spark_core.spark_session)
-            snap_monthly_writer.create_table(snap_monthly_table_property)
-            # # # #
-            process_user_profile_from_pst_to_crt(spark_session=spark_core.spark_session,
-                                                 ay_transaction_df=ay_trans_user_profile_df,
-                                                 ka_transaction_df=ka_trans_user_profile_df,
-                                                 product_key_df=product_key_df,
-                                                 month_key_df=month_key_df,
-                                                 entity=entity,
-                                                 process_date=process_date,
-                                                 today_date=today_date,
-                                                 data_date_col_name='data_date',
-                                                 snap_month_table=snap_monthly_table)
-            # #
-            snap_month_df = spark_core.spark_session.table(snap_monthly_table)
-            snap_month_df.show(n=5, truncate=False)
-            snap_month_df.groupBy('ptn_month_key', 'user_type', 'status', 'entity_uam').agg(
-                count('*').cast(IntegerType()).alias('total')).show(truncate=False)
-            spark_core.close_session()
-        else:
-            raise TypeError(f"input environment is not supported: {args['env']}")
-    except Exception as e:
-        raise TypeError(f"Process on process date: {args['process_date']} error: {e}")
+        print(f'num_row_ka_row: {num_row_ka_input_row}')
+        if num_row_ay_input_row == 0 | num_row_ka_input_row == 0:
+            ay_report = f'{ay_trans_user_profile_table}:{num_row_ay_input_row}'
+            ka_report = f'{ka_trans_user_profile_table}:{num_row_ka_input_row}'
+            raise TypeError(f"one of transaction input df's is empty => {ay_report}  | {ka_report} ")
+        # # # #
+        # # # # Get product key look up DF
+        product_key_df = (get_look_up_product_keys_by_entity(entity,
+                                                             spark_core.spark_session) if env == 'local' else cdp_product_key(
+            f'{entity}_product_key'))
+        # # # #
+        # # # # # Get month key look up DF
+        month_key_df = (
+            mock_month_key_df(spark_core.spark_session) if env == 'local' else cdp_month_key(
+                f'{entity}_month_key'))
+        # # #
+        # # # # Get snap month table name
+        snap_monthly_table_config = TableConfig(config_path, env, f'{entity}_user_profile_curate')
+        snap_monthly_table = f'{snap_monthly_table_config.db_name}.{snap_monthly_table_config.tb_name}'
+        # # # Create snap monthly table if it doesn't exist
+        snap_monthly_table_property = TableProperty(db_name=snap_monthly_table_config.db_name,
+                                                    tb_name=snap_monthly_table_config.tb_name,
+                                                    table_path=snap_monthly_table_config.table_path,
+                                                    fields=snap_monthly_table_config.fields,
+                                                    partitions=snap_monthly_table_config.partitions)
+        print(snap_monthly_table_property.database)
+        print(snap_monthly_table_property.table)
+        print(snap_monthly_table_property.table_path)
+        print(snap_monthly_table_property.create_table_sql(table_format=snap_monthly_table_property.ORC_FORMAT,
+                                                           delimitor=None))
+        snap_monthly_writer = SparkWriter(spark_core.spark_session)
+        snap_monthly_writer.create_table(snap_monthly_table_property)
+        # # # #
+        process_user_profile_from_pst_to_crt(spark_session=spark_core.spark_session,
+                                             ay_transaction_df=ay_trans_user_profile_df,
+                                             ka_transaction_df=ka_trans_user_profile_df,
+                                             product_key_df=product_key_df,
+                                             month_key_df=month_key_df,
+                                             entity=entity,
+                                             process_date=process_date,
+                                             today_date=today_date,
+                                             data_date_col_name='data_date',
+                                             snap_month_table=snap_monthly_table)
+        # #
+        snap_month_df = spark_core.spark_session.table(snap_monthly_table)
+        snap_month_df.show(n=5, truncate=False)
+        snap_month_df.groupBy('entity_code','ptn_month_key', 'user_type', 'status', 'entity_uam', 'data_date').agg(
+            count('*').cast(IntegerType()).alias('total')).sort(col('ptn_month_key'), col('user_type'),
+                                                                col('entity_uam')).show(n=1000,truncate=False)
+    spark_core.close_session()
