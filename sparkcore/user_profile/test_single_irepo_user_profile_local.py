@@ -14,7 +14,7 @@ import pyspark
 from sys import platform
 from pyspark.sql.types import StructType, StructField, StringType, DateType, TimestampType, IntegerType, IntegralType, \
     DoubleType
-from pyspark.sql.functions import date_trunc, to_timestamp
+from pyspark.sql.functions import date_trunc, to_timestamp, when, length
 from typing import List, Optional, Dict
 
 sys.path.append('/home/up_python/PycharmProjects/pysparkProject/sparkcore')
@@ -97,61 +97,65 @@ def cdp_month_key(config_path: str, env: str, config_name: str) -> pyspark.sql.d
     return spark_core.spark_session.table(month_key_table)
 
 
-def get_entity_uam_df(ay_transaction_df: pyspark.sql.dataframe.DataFrame,
-                      ka_transaction_df: pyspark.sql.dataframe.DataFrame) -> pyspark.sql.dataframe.DataFrame:
+def get_entity_uam_df(ext_ay_input_user_profile: pyspark.sql.dataframe.DataFrame,
+                      ext_ka_input_user_profile: pyspark.sql.dataframe.DataFrame) -> pyspark.sql.dataframe.DataFrame:
+    user_status = 'user_status'
+    user_login = 'user_login'
     entities = ['ka', 'ay']
     entity_status = ['status', 'entity']
-    key_list = ['user_login', 'sent_date']
+    key_list = [user_login, 'sent_date']
     entity_uam = 'entity_uam'
-    # remove time from sent_date
-    ext_ay_input_user_profile = ay_transaction_df.withColumn('sent_date',
-                                                             date_trunc("day", col('sent_date')))
-    # ext_ay_input_user_profile.show(truncate=False)
-
-    ext_ka_input_user_profile = ka_transaction_df.withColumn('sent_date',
-                                                             date_trunc("day", col('sent_date')))
+    entity_code = 'entity_code'
     # ext_ka_input_user_profile.show(truncate=False)
     # combine entity ay and ka
     ay_user_entity_df = ext_ay_input_user_profile \
-        .withColumnRenamed('user_status', 'ay_status') \
-        .withColumnRenamed('entity_code', 'ay_entity')
+        .withColumn(user_status,
+                    when((col(user_status).isNull()) | (col(user_status) == ' '), lit('Inactive')).otherwise(
+                        col(user_status))) \
+        .withColumnRenamed(user_status, 'ay_status') \
+        .withColumnRenamed(entity_code, 'ay_entity') \
+        .withColumn(user_login, when((col(user_login).isNull()) | (col(user_login) == ' ') | (col(user_login) == ''),
+                                     lit('ay_none')).otherwise(col(user_login)))
+
     ka_user_entity_df = ext_ka_input_user_profile \
-        .withColumnRenamed('user_status', 'ka_status') \
-        .withColumnRenamed('entity_code', 'ka_entity')
+        .withColumn(user_status,
+                    when((col(user_status).isNull()) | (col(user_status) == ' '), lit('Inactive')).otherwise(
+                        col(user_status))) \
+        .withColumnRenamed(user_status, 'ka_status') \
+        .withColumnRenamed(entity_code, 'ka_entity') \
+        .withColumn(user_login, when((col(user_login).isNull()) | (col(user_login) == ' ') | (col(user_login) == ''),
+                                     lit('ka_none')).otherwise(col(user_login)))
     all_entities_df = DataFrameHelper.combine_entity_df(ay_df=ay_user_entity_df, ka_df=ka_user_entity_df,
                                                         join_key=key_list)
+
     # label entity to status and entity
     uam_cal_list = key_list + [entities + "_" + entity_status for
                                entity_status, entities in
                                itertools.product(entity_status, entities)]
     print('\n'.join(uam_cal_list))
     entity_status_labeled_df = all_entities_df.selectExpr(*uam_cal_list)
-    # entity_status_labeled_df.show(n=100, truncate=False)
+
     # Get user_login entity_uam
-    uam_df = entity_status_labeled_df.withColumn(entity_uam, DataFrameHelper.add_entity_uam()).select('user_login',
-                                                                                                      'entity_uam')
-    # uam_df.show(n=100, truncate=False)
-    return uam_df
+    uam_df = entity_status_labeled_df.withColumn(entity_uam, DataFrameHelper.add_entity_uam())
+
+    final_result = uam_df \
+        .select(user_login, entity_uam) \
+        .withColumn(user_login, when(col(user_login).contains("_none"), lit(None)).otherwise(col(user_login)))
+
+    return final_result
 
 
 def ay_mapping_date_and_source_file() -> Dict[str, str]:
-    return {'2021-12-31': '../pysparkProject/sparkcore/user_profile/data/ay_user_profile_20211231_000000.txt',
-            '2022-01-01': '../pysparkProject/sparkcore/user_profile/data/ay_user_profile_20220101_000000.txt',
-            '2022-01-02': '../pysparkProject/sparkcore/user_profile/data/ay_user_profile_20220102_000000.txt'}
+    return {'2021-12-31': '../pysparkProject/sparkcore/user_profile/data/ay_user_profile_20211231_184543.txt',
+            '2022-01-01': '../pysparkProject/sparkcore/user_profile/data/ay_user_profile_20220101_115726.txt',
+            '2022-01-02': '../pysparkProject/sparkcore/user_profile/data/ay_user_profile_20220102_115934.txt'}
 
 
 def ka_mapping_date_and_source_file() -> Dict[str, str]:
-    return {'2021-12-31': '../pysparkProject/sparkcore/user_profile/data/ka_user_profile_20211231_000000.txt',
-            '2021-01-01': '../pysparkProject/sparkcore/user_profile/data/ka_user_profile_20220101_000000.txt',
-            '2021-01-02': '../pysparkProject/sparkcore/user_profile/data/ka_user_profile_20220102_000000.txt'}
+    return {'2021-12-31': '../pysparkProject/sparkcore/user_profile/data/ka_user_profile_20211231_185223.txt',
+            '2022-01-01': '../pysparkProject/sparkcore/user_profile/data/ka_user_profile_20220101_115733.txt',
+            '2022-01-02': '../pysparkProject/sparkcore/user_profile/data/ka_user_profile_20220102_115920.txt'}
 
-
-# 'end_date',
-#             'business_date',
-#             'load_date',
-#             'record_deleted_flag',
-#             'pipeline_name',
-#             'execution_id',
 
 def ext_user_profile_schema() -> List[str]:
     return ['user_login',
@@ -218,6 +222,8 @@ def get_user_profile_transaction_df(spark_session: pyspark.sql.SparkSession,
                                     process_date: str,
                                     today_date: str,
                                     entity: str) -> pyspark.sql.dataframe.DataFrame:
+    print(f'file path name ay: {ay_mapping_date_and_source_file()[process_date]}')
+    print(f'file path name ka: {ka_mapping_date_and_source_file()[process_date]}')
     ay_trans_df = user_profile_transaction_df(spark_session,
                                               ay_mapping_date_and_source_file()[process_date],
                                               process_date,
@@ -239,16 +245,23 @@ def process_user_profile_from_pst_to_crt(spark_session: pyspark.sql.SparkSession
                                          today_date: str,
                                          data_date_col_name: str,
                                          snap_month_table: str) -> None:
-    uam_df = get_entity_uam_df(ay_transaction_df, ka_transaction_df)
+    ext_ay_input_user_profile = ay_transaction_df.withColumn('sent_date',
+                                                             date_trunc("day", col('sent_date')))
+    # ext_ay_input_user_profile.show(truncate=False)
+
+    ext_ka_input_user_profile = ka_transaction_df.withColumn('sent_date',
+                                                             date_trunc("day", col('sent_date')))
+    # ext_ka_input_user_profile.show(truncate=False)
+    uam_df = get_entity_uam_df(ext_ay_input_user_profile, ext_ka_input_user_profile)
+
     # add entity_uam back to transaction_df
-    transaction_w_entity_uam_df = ay_transaction_df.join(uam_df, on=['user_login'],
-                                                         how='left') if entity == 'ay' else ka_transaction_df.join(
+    transaction_w_entity_uam_df = ext_ay_input_user_profile.join(uam_df, on=['user_login'],
+                                                                 how='left') if entity == 'ay' else ext_ka_input_user_profile.join(
         uam_df, on=['user_login'], how='left')
     # transaction_w_entity_uam_df.show(n=100, truncate=False)
     # add user_type
     transaction_w_user_type_df = transaction_w_entity_uam_df \
-        .withColumn('user_type',
-                    DataFrameHelper.add_user_type()) \
+        .withColumn('user_type', DataFrameHelper.add_user_type()) \
         .withColumnRenamed('user_status', 'status') \
         .withColumnRenamed('updated_date', 'web_updated_date') \
         .withColumnRenamed('create_date', 'web_create_date') \
@@ -271,6 +284,7 @@ def process_user_profile_from_pst_to_crt(spark_session: pyspark.sql.SparkSession
     intermediate_w_branch_key_df = DataFrameHelper.with_branch_key(intermediate_w_entity_df).cache()
     # intermediate_w_branch_key_df.show(n=11, truncate=False)
     print('add branch key')
+
     DataFrameHelper.update_insert_snap_monthly_to_table(transaction_df=intermediate_w_branch_key_df,
                                                         process_date=process_date, today_date=today_date,
                                                         month_key_df=month_key_df,
@@ -302,42 +316,48 @@ if __name__ == '__main__':
             # ay
             ay_trans_user_profile_conf = TableConfig(config_path, env, f"ay_user_profile_persist")
             ay_trans_user_profile_table = f'{ay_trans_user_profile_conf.db_name}.{ay_trans_user_profile_conf.tb_name}'
-            ay_trans_user_profile_df = get_user_profile_transaction_df(spark_core.spark_session, process_date,
-                                                                       today_date,
-                                                                       entity) if env == 'local' else spark_core.spark_session.table(
-                ay_trans_user_profile_table) \
+            ay_trans_user_profile_df = (get_user_profile_transaction_df(spark_core.spark_session, process_date,
+                                                                        today_date,
+                                                                        'ay') if env == 'local' else spark_core.spark_session.table(
+                ay_trans_user_profile_table)) \
                 .where(DateHelper.timestamp2str(col('sent_date')) == process_date)
-            num_row_ay_input_df = ay_trans_user_profile_df.count()
-            # # ka
+            num_row_ay_input_row = ay_trans_user_profile_df.count()
+            # ay_trans_user_profile_df.where(col('user_login') == 'PUNBOOPA').show(n=5, truncate=False)
+            ay_trans_user_profile_df.show(n=5, truncate=False)
+            print(f'num_row_ay_row: {num_row_ay_input_row}')
+            # ka
             ka_trans_user_profile_conf = TableConfig(config_path, env, f"ka_user_profile_persist")
             ka_trans_user_profile_table = f'{ka_trans_user_profile_conf.db_name}.{ka_trans_user_profile_conf.tb_name}'
-            ka_trans_user_profile_df = get_user_profile_transaction_df(spark_core.spark_session, process_date,
-                                                                       today_date,
-                                                                       entity) if env == 'local' else spark_core.spark_session.table(
-                ka_trans_user_profile_table) \
+            ka_trans_user_profile_df = (get_user_profile_transaction_df(spark_core.spark_session, process_date,
+                                                                        today_date,
+                                                                        'ka') if env == 'local' else spark_core.spark_session.table(
+                ka_trans_user_profile_table)) \
                 .where(DateHelper.timestamp2str(col('sent_date')) == process_date)
-            num_row_ka_input_df = ka_trans_user_profile_df.count()
-            if num_row_ay_input_df == 0 | num_row_ka_input_df == 0:
-                ay_report = f'{ay_trans_user_profile_table}:{num_row_ay_input_df}'
-                ka_report = f'{ka_trans_user_profile_table}:{num_row_ka_input_df}'
-                raise TypeError(f"one of transaction input df's is empty => {ay_report}  | {ka_report} ")
-
-            ay_trans_user_profile_df.show(n=5, truncate=False)
+            num_row_ka_input_row = ka_trans_user_profile_df.count()
+            # ka_trans_user_profile_df.where(col('user_login') == 'PUNBOOPA').show(n=5, truncate=False)
             ka_trans_user_profile_df.show(n=5, truncate=False)
-
-            # Get product key look up DF
+            print(f'num_row_ka_row: {num_row_ka_input_row}')
+            if num_row_ay_input_row == 0 | num_row_ka_input_row == 0:
+                ay_report = f'{ay_trans_user_profile_table}:{num_row_ay_input_row}'
+                ka_report = f'{ka_trans_user_profile_table}:{num_row_ka_input_row}'
+                raise TypeError(f"one of transaction input df's is empty => {ay_report}  | {ka_report} ")
+            # # # #
+            # # ay_trans_user_profile_df.show(n=5, truncate=False)
+            # # ka_trans_user_profile_df.show(n=5, truncate=False)
+            # # #
+            # # # # Get product key look up DF
             product_key_df = (get_look_up_product_keys_by_entity(entity,
                                                                  spark_core.spark_session) if env == 'local' else cdp_product_key(
                 f'{entity}_product_key'))
-
-            # Get month key look up DF
+            # # # #
+            # # # # # Get month key look up DF
             month_key_df = (
                 mock_month_key_df(spark_core.spark_session) if env == 'local' else cdp_month_key(f'{entity}_month_key'))
-
-            # Get snap month table name
+            # # #
+            # # # # Get snap month table name
             snap_monthly_table_config = TableConfig(config_path, env, f'{entity}_user_profile_curate')
             snap_monthly_table = f'{snap_monthly_table_config.db_name}.{snap_monthly_table_config.tb_name}'
-            # Create snap monthly table if it doesn't exist
+            # # # Create snap monthly table if it doesn't exist
             snap_monthly_table_property = TableProperty(db_name=snap_monthly_table_config.db_name,
                                                         tb_name=snap_monthly_table_config.tb_name,
                                                         table_path=snap_monthly_table_config.table_path,
@@ -350,7 +370,7 @@ if __name__ == '__main__':
                                                                delimitor=None))
             snap_monthly_writer = SparkWriter(spark_core.spark_session)
             snap_monthly_writer.create_table(snap_monthly_table_property)
-
+            # # # #
             process_user_profile_from_pst_to_crt(spark_session=spark_core.spark_session,
                                                  ay_transaction_df=ay_trans_user_profile_df,
                                                  ka_transaction_df=ka_trans_user_profile_df,
@@ -361,10 +381,12 @@ if __name__ == '__main__':
                                                  today_date=today_date,
                                                  data_date_col_name='data_date',
                                                  snap_month_table=snap_monthly_table)
-
+            # #
             snap_month_df = spark_core.spark_session.table(snap_monthly_table)
             snap_month_df.show(n=5, truncate=False)
-            snap_month_df.groupBy('user_type').agg(count('*').cast(IntegerType()).alias('total')).show(truncate=False)
+            snap_month_df.groupBy('ptn_month_key', 'user_type', 'status', 'entity_uam').agg(
+                count('*').cast(IntegerType()).alias('total')).show(truncate=False)
+            spark_core.close_session()
         else:
             raise TypeError(f"input environment is not supported: {args['env']}")
     except Exception as e:
