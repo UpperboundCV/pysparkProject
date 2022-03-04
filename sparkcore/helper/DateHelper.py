@@ -1,9 +1,14 @@
 from datetime import datetime, timedelta
 
+import pyspark.sql.functions
+from pyspark.sql.functions import date_format, col, concat, lit, to_timestamp
+
 
 class DateHelper:
     DATE_FORMAT: str = '%Y-%m-%d'
     DATE_TIME_FORMAT: str = '%Y-%m-%d %H:%M:%S'
+    HIVE_DATE_FORMAT: str = "yyyy-MM-dd"
+    HIVE_TIMESTAMP_FORMAT: str = 'yyyy-MM-dd HH:mm:ss'
 
     @classmethod
     def is_today_first_day_of_month(cls, date: str) -> bool:
@@ -46,4 +51,10 @@ class DateHelper:
     def add_days(cls, date: str, date_delimiter: str, n: int) -> str:
         return (cls.str2datetime(date, date_delimiter) + timedelta(days=n)).strftime(cls.DATE_FORMAT)
 
+    @classmethod
+    def timestamp2str(cls, timestamp_col: pyspark.sql.functions.col) -> str:
+        return date_format(timestamp_col, cls.HIVE_DATE_FORMAT)
 
+    @classmethod
+    def data_date2timestamp(cls, data_date: str) -> pyspark.sql.functions.col:
+        return to_timestamp(concat(lit(data_date), lit(' 00:00:00')), cls.HIVE_TIMESTAMP_FORMAT)

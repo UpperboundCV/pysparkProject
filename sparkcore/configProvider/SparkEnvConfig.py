@@ -44,7 +44,8 @@ class SparkEnvConfig(ConfigProvider):  # next will inherite from config provider
         ]
         if self.mode == super().LOCAL:
             print(f'mode: {super().LOCAL}')
-            base_config_list.append((self.SPARK_LOCAL_DIR, self.config[self.SPARK].get(self.LOCAL_DIR, '/tmp')))
+            base_config_list.append((self.SPARK_PARTITION_OVERWRITE_MODE, "dynamic"))
+            base_config_list.append((self.SPARK_LOCAL_DIR, self.config[self.SPARK].get(self.LOCAL_DIR, '/home/up_python/spark_space')))
         elif self.mode == super().DEV:
             print(f'mode: {super().DEV}')
             base_config_list.append(
